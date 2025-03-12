@@ -16,11 +16,115 @@
             font-family: Arial, sans-serif;
             z-index: 100;
         }
+        
+        /* UI Elements */
+        #controls-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            z-index: 100;
+        }
+        
+        #dashboard {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            z-index: 100;
+            display: flex;
+            gap: 20px;
+        }
+        
+        .gauge {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .gauge-title {
+            font-size: 12px;
+            margin-bottom: 5px;
+            color: #aaa;
+        }
+        
+        .gauge-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .compass {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background-color: #222;
+            position: relative;
+            border: 2px solid #444;
+        }
+        
+        .compass-needle {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            width: 2px;
+            height: 40px;
+            background: linear-gradient(to bottom, red 0%, red 50%, white 50%, white 100%);
+            transform-origin: bottom center;
+        }
+        
+        .compass-labels {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+        }
+        
+        .compass-label {
+            position: absolute;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .north { top: 5px; left: 50%; transform: translateX(-50%); color: red; }
+        .east { top: 50%; right: 5px; transform: translateY(-50%); }
+        .south { bottom: 5px; left: 50%; transform: translateX(-50%); }
+        .west { top: 50%; left: 5px; transform: translateY(-50%); }
     </style>
 </head>
 <body>
-    <div class="info">
-        Controls: Arrow keys to move, T to surface, G to dive, SPACE to shoot torpedoes
+    <div id="controls-info">Controls: Arrow keys to move, T to surface, G to dive, SPACE to shoot torpedoes</div>
+    
+    <div id="dashboard">
+        <div class="gauge">
+            <div class="gauge-title">DEPTH</div>
+            <div class="gauge-value" id="depth-value">0 m</div>
+        </div>
+        <div class="gauge">
+            <div class="gauge-title">SPEED</div>
+            <div class="gauge-value" id="speed-value">0 knots</div>
+        </div>
+        <div class="gauge">
+            <div class="compass">
+                <div class="compass-needle" id="compass-needle"></div>
+                <div class="compass-labels">
+                    <div class="compass-label north">N</div>
+                    <div class="compass-label east">E</div>
+                    <div class="compass-label south">S</div>
+                    <div class="compass-label west">W</div>
+                </div>
+            </div>
+            <div class="gauge-title">HEADING</div>
+        </div>
     </div>
     
     <script type="module">
@@ -49,8 +153,8 @@
         let water;
         let sky;
         const underwaterObjects = [];
-        const torpedoes = [];
-        const keys = {};
+        let torpedoes = []; // Initialize torpedoes array
+        let keys = {}; // Changed from const to let
         let targetY = -15; // Default submarine depth
         const waterLevel = 0;
         
@@ -378,91 +482,112 @@
         
         // Create submarine
         function createSubmarine() {
-            // Create submarine group
-            submarine = new THREE.Group();
-            
-            // Body
-            const bodyGeometry = new THREE.CylinderGeometry(1, 1, 10, 32);
-            const bodyMaterial = new THREE.MeshPhongMaterial({ 
-                color: 0x555555, 
-                specular: 0x333333,
-                shininess: 100
-            });
+            // Submarine body - simple cylinder for now
+            const bodyGeometry = new THREE.CylinderGeometry(1, 1, 6, 16);
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x333344 });
             const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-            body.rotation.x = Math.PI / 2;
-            submarine.add(body);
+            body.rotation.x = Math.PI / 2; // Rotate to horizontal position
             
-            // Conning tower
-            const towerGeometry = new THREE.CylinderGeometry(0.5, 0.5, 3, 32);
-            const tower = new THREE.Mesh(towerGeometry, bodyMaterial);
-            tower.position.set(0, 1.5, 0);
+            // Submarine conning tower (sail)
+            const towerGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1.5, 8);
+            const towerMaterial = new THREE.MeshPhongMaterial({ color: 0x333344 });
+            const tower = new THREE.Mesh(towerGeometry, towerMaterial);
+            tower.position.y = 1;
+            
+            // Group all submarine parts
+            submarine = new THREE.Group();
+            submarine.add(body);
             submarine.add(tower);
             
-            // Fins
-            const finGeometry = new THREE.BoxGeometry(0.5, 0.5, 2);
-            const fin1 = new THREE.Mesh(finGeometry, bodyMaterial);
-            fin1.position.set(0, 0, 4);
-            body.add(fin1);
+            // Set initial position
+            submarine.position.set(0, -5, 0);
             
-            const fin2 = new THREE.Mesh(finGeometry, bodyMaterial);
-            fin2.position.set(0, 0, -4);
-            body.add(fin2);
+            // Add physics properties
+            submarine.velocity = new THREE.Vector3(0, 0, 0);
+            submarine.direction = new THREE.Vector3(0, 0, 1); // Forward direction vector
+            submarine.rotationSpeed = 0.03;
+            submarine.maxSpeed = 0.3;
+            submarine.acceleration = 0.01;
+            submarine.drag = 0.98;
             
-            // Add submarine to scene
+            // Add to scene
             scene.add(submarine);
-            submarine.position.set(0, -15, 0);
             
             return submarine;
         }
         
-        // Setup controls
+        // Set up controls
         function setupControls() {
-            document.addEventListener('keydown', (e) => {
-                keys[e.code] = true;
+            // Track key states
+            keys = {};
+            
+            // Key down event
+            document.addEventListener('keydown', (event) => {
+                keys[event.key] = true;
                 
-                // Surface submarine
-                if (e.code === 'KeyT') {
-                    targetY = 0; // Surface to water level
-                }
-                
-                // Dive submarine
-                if (e.code === 'KeyG') {
-                    targetY = -15; // Dive
-                }
-                
-                // Shoot torpedo
-                if (e.code === 'Space' && !keys['SpaceHeld']) {
-                    keys['SpaceHeld'] = true;
-                    shootTorpedo();
+                // Handle torpedo firing with spacebar
+                if (event.code === 'Space') {
+                    fireTorpedo();
                 }
             });
             
-            document.addEventListener('keyup', (e) => {
-                keys[e.code] = false;
-                if (e.code === 'Space') {
-                    keys['SpaceHeld'] = false;
-                }
+            // Key up event
+            document.addEventListener('keyup', (event) => {
+                keys[event.key] = false;
             });
         }
         
         // Shoot torpedo
-        function shootTorpedo() {
+        function fireTorpedo() {
+            if (!submarine) return;
+            
             const torpedoGeometry = new THREE.SphereGeometry(0.5, 32, 32);
             const torpedoMaterial = new THREE.MeshPhongMaterial({ 
                 color: 0xffff00,
-                emissive: 0x996600
+                emissive: 0xffff00,
+                emissiveIntensity: 0.5
             });
+            
             const torpedo = new THREE.Mesh(torpedoGeometry, torpedoMaterial);
             
-            // Set torpedo position to submarine's position
+            // Position torpedo at submarine's front
             torpedo.position.copy(submarine.position);
+            torpedo.position.z -= 5 * Math.cos(submarine.rotation.y);
+            torpedo.position.x -= 5 * Math.sin(submarine.rotation.y);
             
-            // Set torpedo velocity
-            torpedo.velocity = new THREE.Vector3(0, 0, -0.5);
+            // Set torpedo direction based on submarine's direction
+            torpedo.direction = submarine.direction.clone();
+            torpedo.speed = 1.0; // Torpedo speed
+            torpedo.lifeTime = 100; // How long the torpedo lives before disappearing
             
-            // Add torpedo to scene and torpedoes array
+            // Add to scene and torpedoes array
             scene.add(torpedo);
             torpedoes.push(torpedo);
+        }
+        
+        // Update torpedo positions
+        function updateTorpedoes() {
+            for (let i = torpedoes.length - 1; i >= 0; i--) {
+                const torpedo = torpedoes[i];
+                
+                // Move torpedo forward in its direction
+                torpedo.position.x -= torpedo.direction.x * torpedo.speed;
+                torpedo.position.z -= torpedo.direction.z * torpedo.speed;
+                
+                // Apply slight downward trajectory underwater
+                if (torpedo.position.y < waterLevel) {
+                    torpedo.position.y -= 0.05;
+                }
+                
+                // Decrease lifetime
+                torpedo.lifeTime--;
+                
+                // Remove torpedo if it's too old
+                if (torpedo.lifeTime <= 0) {
+                    scene.remove(torpedo);
+                    torpedoes.splice(i, 1);
+                }
+            }
         }
         
         // Animation functions
@@ -552,21 +677,69 @@
         
         // Update submarine position based on controls
         function updateSubmarinePosition() {
-            if (!submarine) return;
+            // Apply drag to slow down
+            submarine.velocity.multiplyScalar(submarine.drag);
             
-            // Movement speed
-            const speed = 0.1;
+            // Handle keyboard controls
+            if (keys.ArrowUp) {
+                // Accelerate forward
+                submarine.velocity.z += submarine.acceleration * Math.cos(submarine.rotation.y);
+                submarine.velocity.x += submarine.acceleration * Math.sin(submarine.rotation.y);
+                
+                // Update direction vector
+                submarine.direction.set(Math.sin(submarine.rotation.y), 0, Math.cos(submarine.rotation.y));
+            }
+            if (keys.ArrowDown) {
+                // Decelerate/reverse
+                submarine.velocity.z -= submarine.acceleration * Math.cos(submarine.rotation.y);
+                submarine.velocity.x -= submarine.acceleration * Math.sin(submarine.rotation.y);
+                
+                // Update direction vector
+                submarine.direction.set(-Math.sin(submarine.rotation.y), 0, -Math.cos(submarine.rotation.y));
+            }
+            if (keys.ArrowLeft) {
+                // Turn left
+                submarine.rotation.y += submarine.rotationSpeed;
+                
+                // Update direction vector
+                submarine.direction.set(Math.sin(submarine.rotation.y), 0, Math.cos(submarine.rotation.y));
+            }
+            if (keys.ArrowRight) {
+                // Turn right
+                submarine.rotation.y -= submarine.rotationSpeed;
+                
+                // Update direction vector
+                submarine.direction.set(Math.sin(submarine.rotation.y), 0, Math.cos(submarine.rotation.y));
+            }
+            if (keys.t) {
+                // Surface
+                if (submarine.position.y < waterLevel - 1) {
+                    submarine.velocity.y = 0.1;
+                }
+            }
+            if (keys.g) {
+                // Dive
+                submarine.velocity.y = -0.1;
+            }
             
-            // Forward/backward movement
-            if (keys['ArrowUp']) submarine.position.z -= speed;
-            if (keys['ArrowDown']) submarine.position.z += speed;
+            // Limit maximum speed
+            const speed = submarine.velocity.length();
+            if (speed > submarine.maxSpeed) {
+                submarine.velocity.normalize().multiplyScalar(submarine.maxSpeed);
+            }
             
-            // Left/right movement
-            if (keys['ArrowLeft']) submarine.position.x -= speed;
-            if (keys['ArrowRight']) submarine.position.x += speed;
+            // Update position based on velocity
+            submarine.position.add(submarine.velocity);
             
-            // Smooth vertical movement
-            submarine.position.y += (targetY - submarine.position.y) * 0.05;
+            // Limit depth - don't go above water or below seabed
+            if (submarine.position.y > waterLevel - 1) {
+                submarine.position.y = waterLevel - 1;
+                submarine.velocity.y = 0;
+            }
+            if (submarine.position.y < -30) {
+                submarine.position.y = -30;
+                submarine.velocity.y = 0;
+            }
         }
         
         // Update camera position to follow submarine
@@ -585,41 +758,28 @@
             );
         }
         
-        // Update torpedo positions
-        function updateTorpedoes() {
-            torpedoes.forEach((torpedo, index) => {
-                torpedo.position.add(torpedo.velocity);
-                
-                // Remove torpedoes that have gone too far
-                if (torpedo.position.distanceTo(submarine.position) > 50) {
-                    scene.remove(torpedo);
-                    torpedoes.splice(index, 1);
-                }
-            });
-        }
-        
-        // Initialize the game
-        function initGame() {
-            // Create environment
-            createWaterSurface();
-            createSkybox();
-            createEnvironmentObjects();
+        // Update UI elements
+        function updateUI() {
+            // Only update if submarine exists
+            if (!submarine) return;
             
-            // Create submarine
-            createSubmarine();
+            // Update depth gauge
+            const depth = Math.abs(submarine.position.y - waterLevel);
+            document.getElementById('depth-value').textContent = depth.toFixed(1) + ' m';
             
-            // Setup controls
-            setupControls();
+            // Update speed gauge
+            const speed = Math.sqrt(
+                submarine.velocity.x * submarine.velocity.x + 
+                submarine.velocity.z * submarine.velocity.z
+            ) * 10; // Scale for display
+            document.getElementById('speed-value').textContent = speed.toFixed(1) + ' knots';
             
-            // Start animation loop
-            animate();
-            
-            // Handle window resize
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
+            // Update compass - only if submarine has direction property
+            if (submarine.direction) {
+                const angle = Math.atan2(submarine.direction.x, submarine.direction.z);
+                const degrees = angle * (180 / Math.PI);
+                document.getElementById('compass-needle').style.transform = `rotate(${degrees}deg)`;
+            }
         }
         
         // Animation loop
@@ -649,8 +809,38 @@
             updateWaterAppearance(camera.position.y);
             updateSkyFog(camera.position.y);
             
+            // Update UI elements
+            updateUI();
+            
             // Render the scene
             renderer.render(scene, camera);
+        }
+        
+        // Initialize the game
+        function initGame() {
+            // Create environment
+            createWaterSurface();
+            createSkybox();
+            createEnvironmentObjects();
+            
+            // Create submarine
+            createSubmarine();
+            
+            // Initialize torpedoes array
+            torpedoes = [];
+            
+            // Set up controls
+            setupControls();
+            
+            // Start animation loop
+            animate();
+            
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
         }
         
         // Start the game when the DOM is loaded
