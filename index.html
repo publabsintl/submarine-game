@@ -172,8 +172,10 @@
         // Game variables
         let submarine;
         let water;
+        let waterSurfaceFromBelow; // New variable for water surface viewed from below
         let sky;
         const underwaterObjects = [];
+        const aboveWaterObjects = []; // New array for above-water objects
         let torpedoes = []; // Initialize torpedoes array
         let keys = {}; // Changed from const to let
         let targetY = -15; // Default submarine depth
@@ -254,6 +256,25 @@
             water.waves = waves;
             
             scene.add(water);
+            
+            // Create a second water surface that's visible from below
+            const waterFromBelowMaterial = new THREE.MeshPhongMaterial({
+                color: 0x006699, // Slightly darker blue for underwater view
+                map: texture,
+                shininess: 50,
+                specular: 0x333333,
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.BackSide // Only visible from below
+            });
+            
+            // Use the same geometry for consistency
+            waterSurfaceFromBelow = new THREE.Mesh(waterGeometry.clone(), waterFromBelowMaterial);
+            waterSurfaceFromBelow.rotation.x = -Math.PI / 2;
+            waterSurfaceFromBelow.position.y = waterLevel - 0.1; // Slightly below the main water surface
+            waterSurfaceFromBelow.visible = false; // Initially hidden, will be shown only when underwater
+            scene.add(waterSurfaceFromBelow);
+            
             return water;
         }
         
@@ -367,6 +388,9 @@
             floor.position.y = -25;
             scene.add(floor);
             
+            // Store ocean floor position as a global constant
+            window.OCEAN_FLOOR_LEVEL = floor.position.y;
+            
             // Rocks
             const rockGeometry = new THREE.SphereGeometry(2, 16, 16);
             const rockMaterial = new THREE.MeshPhongMaterial({ color: 0x666666 });
@@ -468,6 +492,7 @@
             const island = new THREE.Mesh(islandGeometry, islandMaterial);
             island.position.set(x, 0.5, z); // Slightly above water
             scene.add(island);
+            aboveWaterObjects.push(island); // Add to above-water objects
             
             // Island underwater part
             const underwaterGeometry = new THREE.CylinderGeometry(size * 1.2, size * 0.8, 25, 32);
@@ -502,6 +527,7 @@
             const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
             trunk.position.set(x, size * 2.5 + 0.5, z); // Above island
             scene.add(trunk);
+            aboveWaterObjects.push(trunk); // Add to above-water objects
             
             // Palm leaves
             const leavesGeometry = new THREE.ConeGeometry(size * 2, size * 3, 8);
@@ -511,6 +537,7 @@
             leaves.rotation.x = Math.PI * 0.1; // Tilt slightly
             leaves.rotation.z = Math.random() * Math.PI * 2; // Random rotation
             scene.add(leaves);
+            aboveWaterObjects.push(leaves); // Add to above-water objects
         }
         
         // Create submarine
@@ -632,6 +659,17 @@
                     torpedo.position.y -= 0.05;
                 }
                 
+                // Prevent torpedoes from going below the ocean floor
+                if (torpedo.position.y < window.OCEAN_FLOOR_LEVEL) {
+                    // Torpedo hit the ocean floor - create a small explosion effect
+                    createExplosion(torpedo.position.clone(), 0.5); // Small explosion
+                    
+                    // Remove the torpedo
+                    scene.remove(torpedo);
+                    torpedoes.splice(i, 1);
+                    continue; // Skip the rest of the loop for this torpedo
+                }
+                
                 // Decrease lifetime
                 torpedo.lifeTime--;
                 
@@ -641,6 +679,87 @@
                     torpedoes.splice(i, 1);
                 }
             }
+        }
+        
+        // Create explosion effect
+        function createExplosion(position, size) {
+            // Create particle system for explosion
+            const particleCount = 30;
+            const explosionGeometry = new THREE.BufferGeometry();
+            const particlePositions = new Float32Array(particleCount * 3);
+            
+            // Initialize particles at the explosion center
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                particlePositions[i] = position.x;
+                particlePositions[i + 1] = position.y;
+                particlePositions[i + 2] = position.z;
+            }
+            
+            explosionGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+            
+            // Create particle material with glowing effect
+            const explosionMaterial = new THREE.PointsMaterial({
+                color: 0xff9900,
+                size: size || 1.0,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+            
+            // Create the particle system
+            const explosion = new THREE.Points(explosionGeometry, explosionMaterial);
+            scene.add(explosion);
+            
+            // Store particle velocities
+            const velocities = [];
+            for (let i = 0; i < particleCount; i++) {
+                // Random direction for each particle
+                velocities.push({
+                    x: (Math.random() - 0.5) * 0.3,
+                    y: (Math.random() - 0.5) * 0.3,
+                    z: (Math.random() - 0.5) * 0.3
+                });
+            }
+            
+            // Add to underwater objects to ensure it's only visible underwater
+            underwaterObjects.push(explosion);
+            
+            // Animate the explosion
+            const animateExplosion = () => {
+                // Update positions based on velocities
+                const positions = explosion.geometry.attributes.position.array;
+                
+                for (let i = 0; i < particleCount; i++) {
+                    const idx = i * 3;
+                    
+                    // Update positions
+                    positions[idx] += velocities[i].x;
+                    positions[idx + 1] += velocities[i].y;
+                    positions[idx + 2] += velocities[i].z;
+                }
+                
+                // Mark positions for update
+                explosion.geometry.attributes.position.needsUpdate = true;
+                
+                // Decrease opacity over time
+                explosion.material.opacity -= 0.02;
+                
+                // Remove when fully transparent
+                if (explosion.material.opacity <= 0) {
+                    scene.remove(explosion);
+                    const index = underwaterObjects.indexOf(explosion);
+                    if (index > -1) {
+                        underwaterObjects.splice(index, 1);
+                    }
+                    return;
+                }
+                
+                // Continue animation
+                requestAnimationFrame(animateExplosion);
+            };
+            
+            // Start animation
+            animateExplosion();
         }
         
         // Animation functions
@@ -704,6 +823,11 @@
                     if (obj) obj.visible = true;
                 });
                 
+                // Hide above-water objects
+                aboveWaterObjects.forEach(obj => {
+                    if (obj) obj.visible = false;
+                });
+                
                 // Lighting adjustments for underwater
                 hemiLight.intensity = 0.3;
                 sunLight.visible = false; // Hide directional light underwater
@@ -715,7 +839,10 @@
                 
                 // Underwater fog (denser, blue-green)
                 scene.fog.color.setHex(0x003366);
-                scene.fog.density = 0.025; // Significantly reduced fog density for better underwater visibility
+                scene.fog.density = 0.015; // Significantly reduced fog density for better underwater visibility
+                
+                // Show the second water surface from below
+                waterSurfaceFromBelow.visible = true;
             } else {
                 // Above water
                 water.material.opacity = 0.8; // More transparent above water
@@ -724,6 +851,11 @@
                 // Hide underwater objects
                 underwaterObjects.forEach(obj => {
                     if (obj) obj.visible = false;
+                });
+                
+                // Show above-water objects
+                aboveWaterObjects.forEach(obj => {
+                    if (obj) obj.visible = true;
                 });
                 
                 // Lighting adjustments for above water - REMOVE DIRECTIONAL LIGHT
@@ -738,6 +870,9 @@
                 // Above water fog (less dense, sky blue)
                 scene.fog.color.setHex(0x99D6FF);
                 scene.fog.density = 0.01;
+                
+                // Hide the second water surface from below
+                waterSurfaceFromBelow.visible = false;
             }
         }
         
@@ -859,9 +994,19 @@
                 submarine.position.y = waterLevel - 1;
                 submarine.velocity.y = 0;
             }
-            if (submarine.position.y < -30) {
-                submarine.position.y = -30;
-                submarine.velocity.y = 0;
+            if (submarine.position.y < window.OCEAN_FLOOR_LEVEL) {
+                // Ocean floor collision detected
+                const bounceCoefficient = 0.3; // Less bouncy than island collisions
+                
+                // Apply bounce physics - reflect the vertical velocity
+                submarine.velocity.y = -submarine.velocity.y * bounceCoefficient;
+                
+                // Move submarine to sit on the ocean floor
+                submarine.position.y = window.OCEAN_FLOOR_LEVEL;
+                
+                // Apply some drag to horizontal velocity when hitting the floor
+                submarine.velocity.x *= 0.9;
+                submarine.velocity.z *= 0.9;
             }
         }
         
