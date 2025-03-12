@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Advanced Submarine Battle Simulator</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        .info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            font-family: Arial, sans-serif;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="info">
+        Controls: Arrow keys to move, T to surface, G to dive, SPACE to shoot torpedoes
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Water surface (with distinct color and dynamic opacity)
+        const waterGeometry = new THREE.PlaneGeometry(1000, 1000, 64, 64);
+        const waterMaterial = new THREE.MeshPhongMaterial({
+            color: 0x1e90ff, // Default underwater blue
+            transparent: true,
+            opacity: 0.9,
+            shininess: 150,
+            side: THREE.DoubleSide
+        });
+        const water = new THREE.Mesh(waterGeometry, waterMaterial);
+        water.rotation.x = -Math.PI / 2;
+        water.position.y = 0; // Water surface at y=0
+        scene.add(water);
+
+        // Skybox (above-water experience)
+        const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
+        const skyMaterial = new THREE.MeshBasicMaterial({
+            color: 0x87cefa, // Light sky blue
+            side: THREE.BackSide
+        });
+        const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+        scene.add(sky);
+
+        // Horizon line (to separate sky and water)
+        const horizonGeometry = new THREE.RingGeometry(450, 500, 32);
+        const horizonMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffffff, // White horizon line
+            transparent: true,
+            opacity: 0.5,
+            side: THREE.DoubleSide
+        });
+        const horizon = new THREE.Mesh(horizonGeometry, horizonMaterial);
+        horizon.rotation.x = -Math.PI / 2;
+        horizon.position.y = 0; // At water level
+        scene.add(horizon);
+
+        // Clouds in the sky
+        const cloudCount = 50;
+        const cloudGeometry = new THREE.SphereGeometry(5, 16, 16);
+        const cloudMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 });
+        const clouds = [];
+        for (let i = 0; i < cloudCount; i++) {
+            const cloud = new THREE.Mesh(cloudGeometry, cloudMaterial);
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 300 + Math.random() * 150; // Spread across the sky
+            const height = 100 + Math.random() * 100; // Above water level
+            cloud.position.set(
+                Math.cos(angle) * radius,
+                height,
+                Math.sin(angle) * radius
+            );
+            cloud.scale.set(1 + Math.random() * 2, 0.5 + Math.random(), 1 + Math.random() * 2); // Random size
+            scene.add(cloud);
+            clouds.push(cloud);
+        }
+
+        // Ocean floor
+        const floorGeometry = new THREE.PlaneGeometry(1000, 1000);
+        const floorMaterial = new THREE.MeshPhongMaterial({ color: 0x2f2f2f, transparent: true, opacity: 0.1 });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -25;
+        scene.add(floor);
+
+        // Lighting and fog
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        sunLight.position.set(0, 100, 100);
+        scene.add(sunLight);
+
+        const ambientLight = new THREE.AmbientLight(0x00008b, 0.5);
+        scene.add(ambientLight);
+
+        // Dynamic fog based on camera position
+        scene.fog = new THREE.FogExp2(0x00008b, 0.025);
+
+        // Submarine group
+        const submarine = new THREE.Group();
+
+        // Body
+        const bodyGeometry = new THREE.CylinderGeometry(1, 1, 10, 32);
+        const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x555555, specular: 0x333333 });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.rotation.x = Math.PI / 2;
+        submarine.add(body);
+
+        // Conning tower
+        const towerGeometry = new THREE.CylinderGeometry(0.5, 0.5, 3, 32);
+        const tower = new THREE.Mesh(towerGeometry, bodyMaterial);
+        tower.position.set(0, 1.5, 0);
+        body.add(tower);
+
+        // Fins
+        const finGeometry = new THREE.BoxGeometry(0.5, 0.5, 2);
+        const fin1 = new THREE.Mesh(finGeometry, bodyMaterial);
+        fin1.position.set(0, 0, 4);
+        body.add(fin1);
+        const fin2 = new THREE.Mesh(finGeometry, bodyMaterial);
+        fin2.position.set(0, 0, -4);
+        body.add(fin2);
+
+        scene.add(submarine);
+        submarine.position.set(0, -15, 0);
+
+        // Calculate submarine height for pop-up
+        const box = new THREE.Box3().setFromObject(submarine);
+        const height = box.max.y - box.min.y; // Approx 5 units
+        const fullySubmergedY = -height - 10;
+        const halfSubmergedY = 0; // Center at y=0, top at y=2.5, bottom at y=-2.5
+
+        // Bubble particle system
+        const bubbleCount = 400;
+        const bubbleGeometry = new THREE.BufferGeometry();
+        const bubbleMaterial = new THREE.PointsMaterial({
+            color: 0xffffff,
+            size: 0.15,
+            transparent: true,
+            opacity: 0.9
+        });
+        const positions = new Float32Array(bubbleCount * 3);
+        for (let i = 0; i < bubbleCount; i++) {
+            positions[i * 3] = Math.random() * 100 - 50;
+            positions[i * 3 + 1] = Math.random() * 25 - 20;
+            positions[i * 3 + 2] = Math.random() * 100 - 50;
+        }
+        bubbleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const bubbles = new THREE.Points(bubbleGeometry, bubbleMaterial);
+        scene.add(bubbles);
+
+        // Rocks
+        const rockGeometry = new THREE.SphereGeometry(2, 16, 16);
+        const rockMaterial = new THREE.MeshPhongMaterial({ color: 0x666666 });
+        const rock1 = new THREE.Mesh(rockGeometry, rockMaterial);
+        rock1.position.set(-10, -23, -10);
+        scene.add(rock1);
+        const rock2 = new THREE.Mesh(rockGeometry, rockMaterial);
+        rock2.position.set(15, -23, 5);
+        scene.add(rock2);
+        const rock3 = new THREE.Mesh(rockGeometry, rockMaterial);
+        rock3.position.set(-20, -23, 15);
+        rock3.scale.set(1.5, 1, 1.5);
+        scene.add(rock3);
+
+        // Coral reefs (as an array)
+        const corals = [];
+        function createCoral(x, z) {
+            const coralGeometry = new THREE.ConeGeometry(2, 5, 32);
+            const coralMaterial = new THREE.MeshPhongMaterial({ color: 0xff00ff });
+            const coral = new THREE.Mesh(coralGeometry, coralMaterial);
+            coral.position.set(x, -22, z);
+            coral.rotation.y = Math.random() * Math.PI;
+            scene.add(coral);
+            corals.push(coral);
+        }
+        createCoral(-20, -20);
+        createCoral(15, -30);
+        createCoral(-10, 10);
+
+        // Underwater plants (as an array)
+        const plants = [];
+        function createPlant(x, z) {
+            const plantGeometry = new THREE.CylinderGeometry(0.5, 0.5, 4, 32);
+            const plantMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+            const plant = new THREE.Mesh(plantGeometry, plantMaterial);
+            plant.position.set(x, -22, z);
+            plant.rotation.x = Math.PI / 2;
+            scene.add(plant);
+            plants.push(plant);
+        }
+        createPlant(10, -15);
+        createPlant(-5, 5);
+        createPlant(25, 10);
+
+        // Islands (with submerged base)
+        function createIsland(x, z) {
+            const islandBaseGeometry = new THREE.CylinderGeometry(5, 5, 6, 32); // Taller base for submerged part
+            const islandBaseMaterial = new THREE.MeshPhongMaterial({ color: 0x8b4513 }); // Brown for dirt
+            const islandBase = new THREE.Mesh(islandBaseGeometry, islandBaseMaterial);
+            islandBase.position.set(x, 3, z); // Bottom at y=0 (water surface), top at y=6
+
+            const topGeometry = new THREE.ConeGeometry(4, 2, 32);
+            const topMaterial = new THREE.MeshPhongMaterial({ color: 0x228b22 }); // Green for vegetation
+            const islandTop = new THREE.Mesh(topGeometry, topMaterial);
+            islandTop.position.set(0, 2, 0); // Top at y=8
+            islandBase.add(islandTop);
+
+            scene.add(islandBase);
+        }
+        createIsland(50, 50);
+        createIsland(-60, -30);
+        createIsland(30, -50);
+
+        // Torpedoes array
+        const torpedoes = [];
+
+        // Underwater objects group
+        const underwaterObjects = [rock1, rock2, rock3, bubbles, ...corals, ...plants];
+
+        // Controls
+        const keys = {};
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.code === 'KeyT') targetY = halfSubmergedY; // Surface to y=0
+            if (e.code === 'KeyG') targetY = fullySubmergedY; // Dive
+            if (e.code === 'Space' && !keys['SpaceHeld']) {
+                keys['SpaceHeld'] = true;
+                shootTorpedo();
+            }
+        });
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+            if (e.code === 'Space') keys['SpaceHeld'] = false;
+        });
+
+        function shootTorpedo() {
+            const torpedoGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+            const torpedoMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00 });
+            const torpedo = new THREE.Mesh(torpedoGeometry, torpedoMaterial);
+            torpedo.position.copy(submarine.position);
+            torpedo.velocity = new THREE.Vector3(0, 0, -0.5);
+            scene.add(torpedo);
+            torpedoes.push(torpedo);
+        }
+
+        // Animation state
+        let targetY = submarine.position.y;
+
+        // Game loop
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = performance.now() * 0.001;
+
+            // Water waves for visual distinction
+            const vertices = water.geometry.attributes.position.array;
+            for (let i = 0; i < vertices.length; i += 3) {
+                const x = vertices[i];
+                const z = vertices[i + 2];
+                vertices[i + 1] = Math.sin(x * 0.05 + time) * 0.5 + Math.cos(z * 0.05 + time) * 0.3;
+            }
+            water.geometry.attributes.position.needsUpdate = true;
+
+            // Animate clouds (slight drift)
+            clouds.forEach(cloud => {
+                cloud.position.x += Math.sin(time * 0.1) * 0.02;
+                cloud.position.z += Math.cos(time * 0.1) * 0.02;
+            });
+
+            // Bubbles (visible only below water)
+            const bubblePositions = bubbles.geometry.attributes.position.array;
+            for (let i = 1; i < bubblePositions.length; i += 3) {
+                if (camera.position.y < 0) {
+                    bubblePositions[i] += 0.03;
+                    if (bubblePositions[i] > -5) bubblePositions[i] = -20;
+                }
+            }
+            bubbles.geometry.attributes.position.needsUpdate = true;
+            bubbles.visible = camera.position.y < 0;
+
+            // Player movement
+            const speed = 0.1;
+            if (keys['ArrowUp']) submarine.position.z -= speed;
+            if (keys['ArrowDown']) submarine.position.z += speed;
+            if (keys['ArrowLeft']) submarine.position.x -= speed;
+            if (keys['ArrowRight']) submarine.position.x += speed;
+
+            // Smoothly interpolate to targetY with faster adjustment
+            submarine.position.y += (targetY - submarine.position.y) * 0.1;
+
+            // Torpedo movement
+            torpedoes.forEach((torpedo, index) => {
+                torpedo.position.add(torpedo.velocity);
+                if (torpedo.position.distanceTo(submarine.position) > 50) {
+                    scene.remove(torpedo);
+                    torpedoes.splice(index, 1);
+                }
+            });
+
+            // Update camera
+            camera.position.set(submarine.position.x, submarine.position.y + 5, submarine.position.z + 15);
+            camera.lookAt(submarine.position.x, submarine.position.y, submarine.position.z);
+
+            // Dynamic water color, opacity, and underwater objects visibility
+            if (camera.position.y < 0) {
+                // Underwater
+                scene.fog.color.setHex(0x00008b);
+                scene.fog.density = 0.025;
+                water.material.opacity = 0.9; // Opaque underwater
+                water.material.color.setHex(0x1e90ff); // Lighter blue underwater
+                underwaterObjects.forEach(obj => obj.visible = true);
+                floor.visible = true; // Show floor underwater
+            } else {
+                // Above water
+                scene.fog.color.setHex(0x87cefa);
+                scene.fog.density = 0.005;
+                water.material.opacity = 0.3; // Slight fade above water
+                water.material.color.setHex(0x004080); // Deep ocean blue for surface
+                underwaterObjects.forEach(obj => obj.visible = false); // Hide underwater objects
+                floor.visible = false; // Hide floor above water
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
