@@ -102,7 +102,7 @@
     </style>
 </head>
 <body>
-    <div id="controls-info">Controls: Arrow keys to move, T to surface, G to dive, SPACE to shoot torpedoes</div>
+    <div id="controls-info">Controls: Arrow keys to move, T to surface, G to dive, SPACE to shoot torpedoes, C to toggle camera mode, +/- to adjust camera distance, L to toggle spotlight</div>
     
     <div id="dashboard">
         <div class="gauge">
@@ -138,12 +138,33 @@
         document.body.appendChild(renderer.domElement);
         
         // Lighting
-        const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
-        sunLight.position.set(0, 100, 100);
-        scene.add(sunLight);
+        // Hemisphere light for sky/ground gradient lighting
+        const hemiLight = new THREE.HemisphereLight(0x99D6FF, 0x004466, 0.7);
+        scene.add(hemiLight);
         
-        const ambientLight = new THREE.AmbientLight(0x00008b, 0.5);
+        // Ambient light for overall scene brightness
+        const ambientLight = new THREE.AmbientLight(0x6699cc, 0.5);
         scene.add(ambientLight);
+        
+        // Create a very subtle directional light
+        const sunLight = new THREE.DirectionalLight(0xffffcc, 0.1);
+        sunLight.position.set(1000, 2000, 1000);
+        sunLight.target.position.set(0, 0, 0);
+        scene.add(sunLight);
+        scene.add(sunLight.target);
+        
+        // Add a spotlight attached to the camera for underwater visibility only
+        const cameraLight = new THREE.SpotLight(0x6699cc, 0.7);
+        cameraLight.position.set(0, 1, 2); // Position slightly in front and above
+        cameraLight.target.position.set(0, -2, -10); // Target in front and below camera
+        cameraLight.angle = Math.PI / 10; // Narrow angle
+        cameraLight.penumbra = 1.0; // Maximum soft edges
+        cameraLight.decay = 1.5;
+        cameraLight.distance = 40;
+        cameraLight.visible = false; // Initially off
+        camera.add(cameraLight);
+        camera.add(cameraLight.target);
+        scene.add(camera); // Add camera to scene so the light works
         
         // Initial fog
         scene.fog = new THREE.FogExp2(0x00008b, 0.025);
@@ -157,6 +178,14 @@
         let keys = {}; // Changed from const to let
         let targetY = -15; // Default submarine depth
         const waterLevel = 0;
+        
+        // Camera variables
+        let cameraMode = 'follow'; // 'follow' or 'distant'
+        let cameraDistance = 15; // Default camera distance
+        let cameraHeight = 5; // Default camera height
+        let currentCameraPosition = new THREE.Vector3();
+        let targetCameraPosition = new THREE.Vector3();
+        let cameraLerpFactor = 0.05; // Controls how quickly camera catches up (lower = more lag)
         
         // Create water surface
         function createWaterSurface() {
@@ -529,6 +558,24 @@
                 if (event.code === 'Space') {
                     fireTorpedo();
                 }
+                
+                // Toggle camera mode with 'C' key
+                if (event.key === 'c' || event.key === 'C') {
+                    cameraMode = cameraMode === 'follow' ? 'distant' : 'follow';
+                }
+                
+                // Adjust camera distance with '+' and '-' keys
+                if (event.key === '+' || event.key === '=') {
+                    cameraDistance = Math.min(cameraDistance + 2, 30);
+                }
+                if (event.key === '-' || event.key === '_') {
+                    cameraDistance = Math.max(cameraDistance - 2, 5);
+                }
+                
+                // Toggle camera light with 'L' key
+                if (event.key === 'l' || event.key === 'L') {
+                    cameraLight.visible = !cameraLight.visible;
+                }
             });
             
             // Key up event
@@ -552,8 +599,10 @@
             
             // Position torpedo at submarine's front
             torpedo.position.copy(submarine.position);
-            torpedo.position.z -= 5 * Math.cos(submarine.rotation.y);
-            torpedo.position.x -= 5 * Math.sin(submarine.rotation.y);
+            
+            // Use the direction vector to position the torpedo at the front
+            const offset = submarine.direction.clone().multiplyScalar(5);
+            torpedo.position.add(offset);
             
             // Set torpedo direction based on submarine's direction
             torpedo.direction = submarine.direction.clone();
@@ -571,8 +620,8 @@
                 const torpedo = torpedoes[i];
                 
                 // Move torpedo forward in its direction
-                torpedo.position.x -= torpedo.direction.x * torpedo.speed;
-                torpedo.position.z -= torpedo.direction.z * torpedo.speed;
+                torpedo.position.x += torpedo.direction.x * torpedo.speed;
+                torpedo.position.z += torpedo.direction.z * torpedo.speed;
                 
                 // Apply slight downward trajectory underwater
                 if (torpedo.position.y < waterLevel) {
@@ -650,6 +699,19 @@
                 underwaterObjects.forEach(obj => {
                     if (obj) obj.visible = true;
                 });
+                
+                // Lighting adjustments for underwater
+                hemiLight.intensity = 0.3;
+                sunLight.visible = false; // Hide directional light underwater
+                ambientLight.intensity = 0.6;
+                ambientLight.color.setHex(0x001133);
+                
+                // Enable camera spotlight underwater for better visibility
+                cameraLight.visible = true;
+                
+                // Underwater fog (denser, blue-green)
+                scene.fog.color.setHex(0x003366);
+                scene.fog.density = 0.04;
             } else {
                 // Above water
                 water.material.opacity = 0.8; // More transparent above water
@@ -659,20 +721,24 @@
                 underwaterObjects.forEach(obj => {
                     if (obj) obj.visible = false;
                 });
-            }
-        }
-        
-        function updateSkyFog(cameraY) {
-            // Update fog based on camera position
-            if (cameraY < waterLevel) {
-                // Underwater fog (denser, blue-green)
-                scene.fog.color.setHex(0x003366);
-                scene.fog.density = 0.04;
-            } else {
+                
+                // Lighting adjustments for above water - REMOVE DIRECTIONAL LIGHT
+                hemiLight.intensity = 0.9;
+                sunLight.visible = false; // Hide directional light completely above water
+                ambientLight.intensity = 0.7;
+                ambientLight.color.setHex(0x6699cc);
+                
+                // Disable camera spotlight above water
+                cameraLight.visible = false;
+                
                 // Above water fog (less dense, sky blue)
                 scene.fog.color.setHex(0x99D6FF);
                 scene.fog.density = 0.01;
             }
+        }
+        
+        function updateSkyFog(cameraY) {
+            // This function is now empty as we've moved the fog updates to updateWaterAppearance
         }
         
         // Update submarine position based on controls
@@ -685,30 +751,29 @@
                 // Accelerate forward
                 submarine.velocity.z += submarine.acceleration * Math.cos(submarine.rotation.y);
                 submarine.velocity.x += submarine.acceleration * Math.sin(submarine.rotation.y);
-                
-                // Update direction vector
-                submarine.direction.set(Math.sin(submarine.rotation.y), 0, Math.cos(submarine.rotation.y));
             }
             if (keys.ArrowDown) {
                 // Decelerate/reverse
                 submarine.velocity.z -= submarine.acceleration * Math.cos(submarine.rotation.y);
                 submarine.velocity.x -= submarine.acceleration * Math.sin(submarine.rotation.y);
-                
-                // Update direction vector
-                submarine.direction.set(-Math.sin(submarine.rotation.y), 0, -Math.cos(submarine.rotation.y));
             }
+            
+            // Always keep the direction vector pointing in the direction of the submarine's rotation
+            // regardless of whether moving forward or backward
+            submarine.direction.set(Math.sin(submarine.rotation.y), 0, Math.cos(submarine.rotation.y));
+            
             if (keys.ArrowLeft) {
                 // Turn left
                 submarine.rotation.y += submarine.rotationSpeed;
                 
-                // Update direction vector
+                // Update direction vector after rotation
                 submarine.direction.set(Math.sin(submarine.rotation.y), 0, Math.cos(submarine.rotation.y));
             }
             if (keys.ArrowRight) {
                 // Turn right
                 submarine.rotation.y -= submarine.rotationSpeed;
                 
-                // Update direction vector
+                // Update direction vector after rotation
                 submarine.direction.set(Math.sin(submarine.rotation.y), 0, Math.cos(submarine.rotation.y));
             }
             if (keys.t) {
@@ -746,16 +811,29 @@
         function updateCamera() {
             if (!submarine) return;
             
-            camera.position.set(
-                submarine.position.x, 
-                submarine.position.y + 5, 
-                submarine.position.z + 15
-            );
-            camera.lookAt(
-                submarine.position.x, 
-                submarine.position.y, 
-                submarine.position.z
-            );
+            // Calculate camera position based on submarine's direction and rotation
+            const offset = new THREE.Vector3();
+            
+            if (cameraMode === 'follow') {
+                // Position camera behind submarine based on its direction
+                offset.copy(submarine.direction).multiplyScalar(-cameraDistance);
+                offset.y = cameraHeight; // Add height
+                
+                targetCameraPosition.copy(submarine.position).add(offset);
+            } else if (cameraMode === 'distant') {
+                // Position camera further away for a wider view
+                offset.copy(submarine.direction).multiplyScalar(-cameraDistance * 2);
+                offset.y = cameraHeight * 2; // Higher view
+                
+                targetCameraPosition.copy(submarine.position).add(offset);
+            }
+            
+            // Lerp camera position
+            currentCameraPosition.lerp(targetCameraPosition, cameraLerpFactor);
+            camera.position.copy(currentCameraPosition);
+            
+            // Look at the submarine
+            camera.lookAt(submarine.position);
         }
         
         // Update UI elements
@@ -797,22 +875,35 @@
             animateBubbles(camera.position.y);
             
             // Update submarine position
-            updateSubmarinePosition();
+            if (submarine) {
+                updateSubmarinePosition();
+                
+                // Apply velocity to position
+                submarine.position.x += submarine.velocity.x;
+                submarine.position.z += submarine.velocity.z;
+                
+                // Update camera
+                updateCamera();
+                
+                // Update water appearance based on camera position
+                updateWaterAppearance(camera.position.y);
+                
+                // Update dashboard
+                updateUI();
+                
+                // Update torpedoes
+                updateTorpedoes();
+                
+                // Remove expired torpedoes
+                for (let i = torpedoes.length - 1; i >= 0; i--) {
+                    torpedoes[i].lifeTime--;
+                    if (torpedoes[i].lifeTime <= 0) {
+                        scene.remove(torpedoes[i]);
+                        torpedoes.splice(i, 1);
+                    }
+                }
+            }
             
-            // Update torpedoes
-            updateTorpedoes();
-            
-            // Update camera to follow submarine
-            updateCamera();
-            
-            // Update environment based on camera position
-            updateWaterAppearance(camera.position.y);
-            updateSkyFog(camera.position.y);
-            
-            // Update UI elements
-            updateUI();
-            
-            // Render the scene
             renderer.render(scene, camera);
         }
         
@@ -825,6 +916,17 @@
             
             // Create submarine
             createSubmarine();
+            
+            // Initialize camera position
+            if (submarine) {
+                const initialOffset = new THREE.Vector3();
+                initialOffset.copy(submarine.direction).multiplyScalar(-cameraDistance);
+                initialOffset.y = cameraHeight;
+                
+                currentCameraPosition.copy(submarine.position).add(initialOffset);
+                targetCameraPosition.copy(currentCameraPosition);
+                camera.position.copy(currentCameraPosition);
+            }
             
             // Initialize torpedoes array
             torpedoes = [];
