@@ -56,41 +56,43 @@
         
         // Create water surface
         function createWaterSurface() {
-            // Create a textured water surface
+            // Create a more realistic water texture
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            canvas.width = 512;
-            canvas.height = 512;
+            canvas.width = 1024;
+            canvas.height = 1024;
             
-            ctx.fillStyle = '#001a33'; // Dark blue base
+            // Create solid lighter blue background
+            ctx.fillStyle = '#0099cc';  // Lighter blue
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Grid pattern
-            ctx.strokeStyle = '#0066aa';
-            ctx.lineWidth = 2;
-            const gridSize = 32;
-            for (let i = 0; i <= canvas.width; i += gridSize) {
-                ctx.beginPath();
-                ctx.moveTo(i, 0);
-                ctx.lineTo(i, canvas.height);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.moveTo(0, i);
-                ctx.lineTo(canvas.width, i);
-                ctx.stroke();
-            }
+            // Add subtle wave patterns
+            ctx.globalAlpha = 0.2;
+            
+            // Draw multiple subtle wave layers with similar light blue colors
+            drawWavePattern(ctx, canvas.width, canvas.height, 25, '#00b8e6', 0.15);
+            drawWavePattern(ctx, canvas.width, canvas.height, 40, '#33ccff', 0.1);
+            
+            // Add some noise texture
+            addNoiseTexture(ctx, canvas.width, canvas.height, 0.03);
+            
+            // Add subtle highlights
+            addHighlights(ctx, canvas.width, canvas.height, 0.08);
+            
+            // Reset alpha
+            ctx.globalAlpha = 1.0;
             
             const texture = new THREE.CanvasTexture(canvas);
             texture.wrapS = THREE.RepeatWrapping;
             texture.wrapT = THREE.RepeatWrapping;
-            texture.repeat.set(10, 10);
+            texture.repeat.set(6, 6);  // Reduced repeat to make pattern less obvious
             
-            // Water material with texture
+            // Water material with improved texture
             const waterMaterial = new THREE.MeshPhongMaterial({
-                color: 0x001a33, // Dark blue for water
+                color: 0x0099cc, // Consistent lighter blue
                 map: texture,
-                shininess: 90,
-                specular: 0x666666,
+                shininess: 100,
+                specular: 0xffffff,
                 transparent: true,
                 opacity: 0.8,
                 side: THREE.FrontSide
@@ -119,6 +121,68 @@
             
             scene.add(water);
             return water;
+        }
+        
+        // Helper function to draw wave patterns
+        function drawWavePattern(ctx, width, height, waveHeight, color, opacity) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 0.5;  // Thinner lines
+            ctx.globalAlpha = opacity;
+            
+            for (let y = 0; y < height; y += waveHeight) {
+                ctx.beginPath();
+                
+                // Start at the left edge
+                ctx.moveTo(0, y);
+                
+                // Create a wavy line across the canvas
+                for (let x = 0; x < width; x += 15) {
+                    const variance = Math.random() * waveHeight / 3;
+                    ctx.lineTo(x, y + variance);
+                }
+                
+                ctx.stroke();
+            }
+        }
+        
+        // Helper function to add noise texture
+        function addNoiseTexture(ctx, width, height, intensity) {
+            ctx.globalAlpha = intensity;
+            
+            for (let i = 0; i < width * height * 0.05; i++) {
+                const x = Math.random() * width;
+                const y = Math.random() * height;
+                const radius = Math.random() * 2 + 0.5;
+                
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                
+                // Random blue-white shade
+                const shade = Math.floor(Math.random() * 100 + 155);
+                ctx.fillStyle = `rgb(${shade}, ${shade + 30}, ${shade + 50})`;
+                ctx.fill();
+            }
+        }
+        
+        // Helper function to add highlights
+        function addHighlights(ctx, width, height, intensity) {
+            ctx.globalAlpha = intensity;
+            
+            for (let i = 0; i < 100; i++) {
+                const x = Math.random() * width;
+                const y = Math.random() * height;
+                const radius = Math.random() * 5 + 1;
+                
+                // Create radial gradient for highlight
+                const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+                gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+                gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
         
         // Create skybox
