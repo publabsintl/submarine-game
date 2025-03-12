@@ -178,6 +178,7 @@
         let keys = {}; // Changed from const to let
         let targetY = -15; // Default submarine depth
         const waterLevel = 0;
+        const islands = []; // Array to store island positions and sizes for collision detection
         
         // Camera variables
         let cameraMode = 'follow'; // 'follow' or 'distant'
@@ -489,6 +490,9 @@
                     size * 0.15
                 );
             }
+            
+            // Store island position and size for collision detection
+            islands.push({ x, z, size });
         }
         
         function createPalmTree(x, z, size) {
@@ -711,7 +715,7 @@
                 
                 // Underwater fog (denser, blue-green)
                 scene.fog.color.setHex(0x003366);
-                scene.fog.density = 0.04;
+                scene.fog.density = 0.025; // Significantly reduced fog density for better underwater visibility
             } else {
                 // Above water
                 water.material.opacity = 0.8; // More transparent above water
@@ -793,8 +797,62 @@
                 submarine.velocity.normalize().multiplyScalar(submarine.maxSpeed);
             }
             
-            // Update position based on velocity
-            submarine.position.add(submarine.velocity);
+            // Store current position before collision detection
+            const nextPosition = new THREE.Vector3(
+                submarine.position.x + submarine.velocity.x,
+                submarine.position.y + submarine.velocity.y,
+                submarine.position.z + submarine.velocity.z
+            );
+            
+            // Check for collisions with islands
+            let collision = false;
+            let collisionNormal = new THREE.Vector3();
+            let penetrationDepth = 0;
+            
+            for (const island of islands) {
+                // Calculate horizontal distance to island center
+                const dx = nextPosition.x - island.x;
+                const dz = nextPosition.z - island.z;
+                const horizontalDistance = Math.sqrt(dx * dx + dz * dz);
+                
+                // Collision detection - add a buffer for submarine size
+                const submarineRadius = 2; // Approximate submarine radius
+                const collisionRadius = island.size * 1.2 + submarineRadius;
+                
+                if (horizontalDistance < collisionRadius) {
+                    // Collision detected
+                    collision = true;
+                    
+                    // Calculate collision normal (direction to push submarine away)
+                    collisionNormal.set(dx, 0, dz).normalize();
+                    
+                    // Calculate penetration depth
+                    penetrationDepth = collisionRadius - horizontalDistance;
+                    
+                    // Break out of loop after first collision
+                    break;
+                }
+            }
+            
+            if (collision) {
+                // Apply bounce physics
+                const bounceCoefficient = 0.5; // How bouncy the collision is
+                
+                // Calculate dot product to determine how much velocity is in the direction of the collision
+                const velocityDotNormal = submarine.velocity.x * collisionNormal.x + 
+                                          submarine.velocity.z * collisionNormal.z;
+                
+                // Apply impulse in the direction of the collision normal
+                submarine.velocity.x -= (1 + bounceCoefficient) * velocityDotNormal * collisionNormal.x;
+                submarine.velocity.z -= (1 + bounceCoefficient) * velocityDotNormal * collisionNormal.z;
+                
+                // Move submarine out of collision by penetration depth
+                submarine.position.x += collisionNormal.x * penetrationDepth;
+                submarine.position.z += collisionNormal.z * penetrationDepth;
+            } else {
+                // No collision, update position based on velocity
+                submarine.position.add(submarine.velocity);
+            }
             
             // Limit depth - don't go above water or below seabed
             if (submarine.position.y > waterLevel - 1) {
