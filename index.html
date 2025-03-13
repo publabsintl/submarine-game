@@ -6,7 +6,7 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div id="controls-info">Controls: Arrow keys to move, T to surface, G to dive, SPACE to shoot torpedoes, C to toggle camera mode, +/- to adjust camera distance, L to toggle spotlight</div>
+    <div id="controls-info">Controls: Arrow keys to move, T to surface, G to dive, SPACE to shoot torpedoes, C to toggle camera mode, +/- to adjust camera distance, L to toggle spotlight, [ and ] to adjust game speed</div>
     
     <div id="dashboard">
         <div class="gauge">
@@ -28,6 +28,14 @@
                 </div>
             </div>
             <div class="gauge-title">HEADING</div>
+        </div>
+        <div class="gauge" style="display: none;">
+            <div class="gauge-title">TIME SCALE</div>
+            <div class="gauge-value" id="timescale-value">0.4x</div>
+            <div class="timescale-controls">
+                <button id="decrease-timescale">-</button>
+                <button id="increase-timescale">+</button>
+            </div>
         </div>
     </div>
     

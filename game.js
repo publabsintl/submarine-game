@@ -3,6 +3,8 @@ import { PlayerStats } from './playerStats.js';
 import { CombatSystem } from './combatSystem.js';
 import { WaveManager } from './waveManager.js';
 import { PickupSystem } from './pickupSystem.js';
+import { EnvironmentSystem } from './environmentSystem.js';
+import { FishSystem } from './fishSystem.js';
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -57,11 +59,16 @@ let targetY = -15; // Default submarine depth
 const waterLevel = 0;
 const islands = []; // Array to store island positions and sizes for collision detection
 
+// Global time scale to control animation speed (0.4 = slower speed)
+let timeScale = 0.4;
+
 // Game systems
 let playerStats;
 let combatSystem;
 let waveManager;
 let pickupSystem;
+let environmentSystem;
+let fishSystem;
 let gameActive = false;
 
 // Camera variables
@@ -116,8 +123,8 @@ function createWaterSurface() {
         side: THREE.FrontSide
     });
     
-    // Water geometry (large plane)
-    const waterGeometry = new THREE.PlaneGeometry(1000, 1000, 50, 50);
+    // Water geometry (expanded plane for larger map)
+    const waterGeometry = new THREE.PlaneGeometry(2000, 2000, 100, 100);
     water = new THREE.Mesh(waterGeometry, waterMaterial);
     water.rotation.x = -Math.PI / 2;
     water.position.y = waterLevel;
@@ -757,7 +764,7 @@ function animateWater(time) {
     for (let i = 0; i < vertices.length / 3; i++) {
         const wave = waves[i];
         vertices[i * 3 + 2] = wave.z + Math.sin(wave.ang) * wave.amp;
-        wave.ang += wave.speed;
+        wave.ang += wave.speed * timeScale; // Apply time scale
     }
     
     water.geometry.attributes.position.needsUpdate = true;
@@ -777,7 +784,7 @@ function animateBubbles(cameraY) {
     if (cameraY < 0) {
         const bubblePositions = bubbles.geometry.attributes.position.array;
         for (let i = 1; i < bubblePositions.length; i += 3) {
-            bubblePositions[i] += 0.05; // Move bubbles upward
+            bubblePositions[i] += 0.05 * timeScale; // Apply time scale to bubble movement
             
             // Reset bubbles that reach the surface
             if (bubblePositions[i] > -1) {
@@ -873,13 +880,13 @@ function updateSubmarinePosition() {
     // Handle keyboard controls
     if (keys.ArrowUp) {
         // Accelerate forward
-        submarine.velocity.z += submarine.acceleration * Math.cos(submarine.rotation.y);
-        submarine.velocity.x += submarine.acceleration * Math.sin(submarine.rotation.y);
+        submarine.velocity.z += submarine.acceleration * Math.cos(submarine.rotation.y) * timeScale; // Apply time scale
+        submarine.velocity.x += submarine.acceleration * Math.sin(submarine.rotation.y) * timeScale; // Apply time scale
     }
     if (keys.ArrowDown) {
         // Decelerate/reverse
-        submarine.velocity.z -= submarine.acceleration * Math.cos(submarine.rotation.y);
-        submarine.velocity.x -= submarine.acceleration * Math.sin(submarine.rotation.y);
+        submarine.velocity.z -= submarine.acceleration * Math.cos(submarine.rotation.y) * timeScale; // Apply time scale
+        submarine.velocity.x -= submarine.acceleration * Math.sin(submarine.rotation.y) * timeScale; // Apply time scale
     }
     
     // Always keep the direction vector pointing in the direction of the submarine's rotation
@@ -888,14 +895,14 @@ function updateSubmarinePosition() {
     
     if (keys.ArrowLeft) {
         // Turn left
-        submarine.rotation.y += submarine.rotationSpeed;
+        submarine.rotation.y += submarine.rotationSpeed * timeScale; // Apply time scale
         
         // Update direction vector after rotation
         submarine.direction.set(Math.sin(submarine.rotation.y), 0, Math.cos(submarine.rotation.y));
     }
     if (keys.ArrowRight) {
         // Turn right
-        submarine.rotation.y -= submarine.rotationSpeed;
+        submarine.rotation.y -= submarine.rotationSpeed * timeScale; // Apply time scale
         
         // Update direction vector after rotation
         submarine.direction.set(Math.sin(submarine.rotation.y), 0, Math.cos(submarine.rotation.y));
@@ -903,12 +910,12 @@ function updateSubmarinePosition() {
     if (keys.t) {
         // Surface
         if (submarine.position.y < waterLevel - 1) {
-            submarine.velocity.y = 0.1;
+            submarine.velocity.y = 0.1 * timeScale; // Apply time scale
         }
     }
     if (keys.g) {
         // Dive
-        submarine.velocity.y = -0.1;
+        submarine.velocity.y = -0.1 * timeScale; // Apply time scale
     }
     
     // Limit maximum speed
@@ -1046,6 +1053,9 @@ function updateUI() {
         const degrees = angle * (180 / Math.PI);
         document.getElementById('compass-needle').style.transform = `rotate(${degrees}deg)`;
     }
+    
+    // Update time scale display
+    document.getElementById('timescale-value').textContent = timeScale.toFixed(1) + 'x';
 }
 
 // Animation loop
@@ -1066,32 +1076,53 @@ function animate() {
     if (submarine) {
         updateSubmarinePosition();
         
-        // Apply velocity to position
-        submarine.position.x += submarine.velocity.x;
-        submarine.position.z += submarine.velocity.z;
-        
         // Update camera
         updateCamera();
+        
+        // Update UI
+        updateUI();
         
         // Update water appearance based on camera position
         updateWaterAppearance(camera.position.y);
         
-        // Update dashboard
-        updateUI();
-        
-        // Update torpedoes
-        updateTorpedoes();
-        
-        // Remove expired torpedoes
-        for (let i = torpedoes.length - 1; i >= 0; i--) {
-            torpedoes[i].lifeTime--;
-            if (torpedoes[i].lifeTime <= 0) {
-                scene.remove(torpedoes[i]);
-                torpedoes.splice(i, 1);
+        // Update sky fog
+        updateSkyFog(camera.position.y);
+    }
+    
+    // Update torpedoes
+    updateTorpedoes();
+    
+    // Update game systems
+    if (gameActive) {
+        // Update player stats
+        if (playerStats) {
+            if (playerStats.updateUI) {
+                playerStats.updateUI();
             }
+        }
+        
+        // Update combat system
+        if (combatSystem) {
+            combatSystem.update();
+        }
+        
+        // Update wave manager
+        if (waveManager) {
+            waveManager.update();
+        }
+        
+        // Update pickup system
+        if (pickupSystem) {
+            pickupSystem.update();
+        }
+        
+        // Update fish system
+        if (fishSystem) {
+            fishSystem.update(0.016 * timeScale, submarine.position); // Apply time scale to fish update
         }
     }
     
+    // Render scene
     renderer.render(scene, camera);
 }
 
@@ -1113,10 +1144,23 @@ function initGame(gameMode = 'single', playerSettings = null) {
     torpedoes = [];
     enemyTorpedoes = [];
     
-    // Create environment
+    // Create water and sky
     createWaterSurface();
     createSkybox();
-    createEnvironmentObjects();
+    
+    // Initialize enhanced environment system
+    environmentSystem = new EnvironmentSystem(scene);
+    const environmentObjects = environmentSystem.initialize();
+    
+    // Add environment objects to our tracking arrays
+    underwaterObjects.push(...environmentObjects.underwaterObjects);
+    aboveWaterObjects.push(...environmentObjects.aboveWaterObjects);
+    islands.push(...environmentObjects.islands);
+    
+    // Initialize fish system
+    fishSystem = new FishSystem(scene);
+    fishSystem.setObstacles(islands);
+    fishSystem.initialize(150); // Create 150 fish of various species
     
     // Initialize player stats system
     playerStats = new PlayerStats(
@@ -1145,6 +1189,24 @@ function initGame(gameMode = 'single', playerSettings = null) {
     
     // Set up controls
     setupControls();
+    
+    // Add key handlers for time scale adjustment
+    document.addEventListener('keydown', function(event) {
+        if (event.key === '[') {
+            // Decrease time scale (slow down animations)
+            timeScale = Math.max(0.1, timeScale - 0.1);
+            console.log('Time Scale:', timeScale.toFixed(1));
+            updateTimeScaleUI();
+        } else if (event.key === ']') {
+            // Increase time scale (speed up animations)
+            timeScale = Math.min(2.0, timeScale + 0.1);
+            console.log('Time Scale:', timeScale.toFixed(1));
+            updateTimeScaleUI();
+        }
+    });
+    
+    // Set up time scale UI buttons
+    setupTimeScaleControls();
     
     // Handle window resize
     window.addEventListener('resize', () => {
@@ -1221,6 +1283,19 @@ function initGame(gameMode = 'single', playerSettings = null) {
     
     // Set up game over event listener
     document.addEventListener('gameOver', handleGameOver);
+    
+    // Add key handlers for time scale adjustment
+    document.addEventListener('keydown', function(event) {
+        if (event.key === '[') {
+            // Decrease time scale (slow down animations)
+            timeScale = Math.max(0.1, timeScale - 0.1);
+            console.log('Time Scale:', timeScale.toFixed(1));
+        } else if (event.key === ']') {
+            // Increase time scale (speed up animations)
+            timeScale = Math.min(2.0, timeScale + 0.1);
+            console.log('Time Scale:', timeScale.toFixed(1));
+        }
+    });
 }
 
 // Handle game over event
@@ -1316,6 +1391,47 @@ function setupGameEventListeners(enemyManager) {
             submarine.velocity = new THREE.Vector3(0, 0, 0);
         }
     });
+}
+
+// Set up time scale UI controls
+function setupTimeScaleControls() {
+    // Make timeScale available globally
+    window.timeScale = timeScale;
+    
+    // Set up decrease button
+    const decreaseButton = document.getElementById('decrease-timescale');
+    if (decreaseButton) {
+        decreaseButton.addEventListener('click', function() {
+            timeScale = Math.max(0.1, timeScale - 0.1);
+            updateTimeScaleUI();
+        });
+    }
+    
+    // Set up increase button
+    const increaseButton = document.getElementById('increase-timescale');
+    if (increaseButton) {
+        increaseButton.addEventListener('click', function() {
+            timeScale = Math.min(2.0, timeScale + 0.1);
+            updateTimeScaleUI();
+        });
+    }
+    
+    // Initial update
+    updateTimeScaleUI();
+}
+
+// Update time scale UI
+function updateTimeScaleUI() {
+    // Update global timeScale
+    window.timeScale = timeScale;
+    
+    // Update UI display
+    const timeScaleElement = document.getElementById('timescale-value');
+    if (timeScaleElement) {
+        timeScaleElement.textContent = timeScale.toFixed(1) + 'x';
+    }
+    
+    console.log('Time Scale:', timeScale.toFixed(1));
 }
 
 // Export functions for use in index.html

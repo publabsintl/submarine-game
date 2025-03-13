@@ -93,3 +93,34 @@ body { margin: 0; overflow: hidden; background-color: #000; }
 .east { top: 50%; right: 5px; transform: translateY(-50%); }
 .south { bottom: 5px; left: 50%; transform: translateX(-50%); }
 .west { top: 50%; left: 5px; transform: translateY(-50%); }
+
+/* Time Scale Controls */
+.timescale-controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 5px;
+}
+
+.timescale-controls button {
+    width: 25px;
+    height: 25px;
+    background-color: #333;
+    color: white;
+    border: 1px solid #555;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.timescale-controls button:hover {
+    background-color: #444;
+}
+
+.timescale-controls button:active {
+    background-color: #222;
+}
