@@ -29,6 +29,11 @@
             </div>
             <div class="gauge-title">HEADING</div>
         </div>
+        <div class="gauge">
+            <div class="gauge-title">ENEMIES</div>
+            <div class="gauge-value" id="enemies-value">0</div>
+        </div>
+        <!-- Radar removed from dashboard and placed in its own container -->
         <div class="gauge" style="display: none;">
             <div class="gauge-title">TIME SCALE</div>
             <div class="gauge-value" id="timescale-value">0.4x</div>
@@ -39,7 +44,21 @@
         </div>
     </div>
     
-    <script src="gameWrapper.js"></script>
+    <div id="radar-container">
+        <div class="gauge-title">RADAR</div>
+        <div id="radar-map" class="radar-map"></div>
+    </div>
+    
+    <!-- Load all scripts in the correct order -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <script src="playerStats.js"></script>
+    <script src="combatSystem.js"></script>
+    <script src="waveManager.js"></script>
+    <script src="pickupSystem.js"></script>
+    <script src="environmentSystem.js"></script>
+    <script src="fishSystem.js"></script>
+    <script src="enemies.js"></script>
+    <script src="game.js"></script>
     <script src="startScreen.js"></script>
     <script>
         // Initialize the start screen when the DOM is loaded

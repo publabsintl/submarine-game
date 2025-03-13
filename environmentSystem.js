@@ -1,7 +1,7 @@
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js';
+// THREE is loaded globally from index.html
 
 // Environment system to handle the expanded underwater world
-class EnvironmentSystem {
+window.EnvironmentSystem = class EnvironmentSystem {
     constructor(scene) {
         this.scene = scene;
         this.underwaterObjects = [];
@@ -637,4 +637,4 @@ class EnvironmentSystem {
     }
 }
 
-export { EnvironmentSystem };
+// EnvironmentSystem class is now available globally as window.EnvironmentSystem

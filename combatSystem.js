@@ -1,8 +1,8 @@
 // Combat System Module for Submarine Game
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js';
+// THREE is loaded globally from index.html
 
 // Combat system class to handle collisions, damage, and effects
-class CombatSystem {
+window.CombatSystem = class CombatSystem {
     constructor(scene, playerSubmarine, playerStats) {
         this.scene = scene;
         this.playerSubmarine = playerSubmarine;
@@ -157,13 +157,20 @@ class CombatSystem {
         
         const torpedo = new THREE.Mesh(torpedoGeometry, torpedoMaterial);
         
-        // Set torpedo position and direction
+        // Set torpedo position and direction (including depth)
         torpedo.position.copy(torpedoData.position);
         torpedo.direction = torpedoData.direction.clone();
         torpedo.target = torpedoData.target.clone();
         torpedo.speed = 0.8; // Slightly slower than player torpedoes
         torpedo.lifeTime = 100;
         torpedo.isEnemyTorpedo = true;
+        
+        // Rotate torpedo to face direction of travel
+        const lookAt = new THREE.Vector3().addVectors(
+            torpedo.position,
+            torpedo.direction.clone().multiplyScalar(1)
+        );
+        torpedo.lookAt(lookAt);
         
         // Add to scene
         this.scene.add(torpedo);
@@ -315,5 +322,4 @@ class CombatSystem {
     }
 }
 
-// Export the CombatSystem class
-export { CombatSystem };
+// CombatSystem class is now available globally as window.CombatSystem

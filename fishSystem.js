@@ -1,7 +1,7 @@
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js';
+// THREE is loaded globally from index.html
 
-// Import timeScale from game.js
-let timeScale = 1.0; // Default value that will be updated
+// Use timeScale from window object only
+// No local declaration needed as we'll use window.timeScale
 
 // Fish species with different colors, sizes, and behaviors
 const FISH_SPECIES = [
@@ -56,7 +56,7 @@ const FISH_SPECIES = [
     }
 ];
 
-class Fish {
+window.Fish = class Fish {
     constructor(scene, species, position) {
         this.scene = scene;
         this.species = species;
@@ -360,8 +360,8 @@ class Fish {
         // Skip if not visible
         if (!this.mesh.visible) return;
         
-        // Animation time
-        const time = performance.now() * 0.001;
+        // Animation time - slowed down for smoother movement
+        const time = performance.now() * 0.0005;
         
         // Calculate steering forces
         let steering = new THREE.Vector3();
@@ -442,8 +442,9 @@ class Fish {
         // Set velocity based on direction and speed
         this.velocity.copy(this.direction).multiplyScalar(this.speed);
         
-        // Update position
-        this.mesh.position.add(this.velocity);
+        // Update position with velocity (scaled by timeScale)
+        const scaledVelocity = this.velocity.clone().multiplyScalar(window.timeScale || 1.0);
+        this.mesh.position.add(scaledVelocity);
         
         // Update rotation to face direction of movement
         if (this.velocity.length() > 0.001) {
@@ -529,7 +530,7 @@ class Fish {
     }
 }
 
-class FishSystem {
+window.FishSystem = class FishSystem {
     constructor(scene) {
         this.scene = scene;
         this.fishes = [];
@@ -582,20 +583,20 @@ class FishSystem {
     setObstacles(obstacles) {
         this.obstacles = obstacles;
     }
-    
     // Method to update the timeScale from game.js
     setTimeScale(value) {
-        timeScale = value;
+        window.timeScale = value;
     }
-    
     update(deltaTime, playerPosition) {
         // Get the latest timeScale value from game.js
-        if (window.timeScale !== undefined) {
-            timeScale = window.timeScale;
-        }
+        const currentTimeScale = window.timeScale || 1.0; // Default if not set
         
         // Apply timeScale to deltaTime
-        const scaledDeltaTime = deltaTime * timeScale;
+        const scaledDeltaTime = deltaTime * currentTimeScale;
+        
+        // Debug log to check if update is being called
+        console.log("Updating fish system with timeScale:", currentTimeScale);
+        console.log("Updating fish system with timeScale:", timeScale);
         
         // Add player submarine as an obstacle
         const playerObstacle = {
@@ -625,4 +626,4 @@ class FishSystem {
     }
 }
 
-export { FishSystem };
+// FishSystem class is now available globally as window.FishSystem

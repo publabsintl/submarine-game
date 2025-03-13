@@ -1,7 +1,7 @@
 // Player Stats Module for Submarine Game
 
 // Player stats class to manage health, ammo, and lives
-class PlayerStats {
+window.PlayerStats = class PlayerStats {
     constructor(initialHealth = 100, initialAmmo = 100, initialLives = 3) {
         // Core stats
         this.maxHealth = initialHealth;
@@ -239,5 +239,4 @@ class PlayerStats {
     }
 }
 
-// Export the PlayerStats class
-export { PlayerStats };
+// PlayerStats class is now available globally as window.PlayerStats

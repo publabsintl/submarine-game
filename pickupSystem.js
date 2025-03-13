@@ -1,8 +1,8 @@
 // Pickup System Module for Submarine Game
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js';
+// THREE is loaded globally from index.html
 
 // Pickup system class to handle ammo boxes and other collectibles
-class PickupSystem {
+window.PickupSystem = class PickupSystem {
     constructor(scene, playerStats) {
         this.scene = scene;
         this.playerStats = playerStats;
@@ -100,7 +100,7 @@ class PickupSystem {
             effect: pickupProps.effect,
             bobHeight: 0.5 + Math.random() * 0.5, // Random bob height
             bobSpeed: 0.5 + Math.random() * 0.5,  // Random bob speed
-            rotationSpeed: 0.01 + Math.random() * 0.02, // Random rotation speed
+            rotationSpeed: 0.001 + Math.random() * 0.02, // Random rotation speed
             spawnTime: performance.now()
         });
     }
@@ -280,5 +280,4 @@ class PickupSystem {
     }
 }
 
-// Export the PickupSystem class
-export { PickupSystem };
+// PickupSystem class is now available globally as window.PickupSystem

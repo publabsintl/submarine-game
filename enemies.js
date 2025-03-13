@@ -1,4 +1,4 @@
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js';
+// THREE is loaded globally from index.html
 
 // Array of computer-generated enemy names
 const ENEMY_NAMES = [
@@ -9,7 +9,7 @@ const ENEMY_NAMES = [
 ];
 
 // Enemy class to manage enemy submarines
-class Enemy {
+window.Enemy = class Enemy {
     constructor(scene, position, size = 1.0) {
         this.scene = scene;
         this.position = position || new THREE.Vector3(
@@ -118,9 +118,14 @@ class Enemy {
             this.direction.lerp(directionToPlayer, 0.02);
             this.direction.normalize();
             
-            // Accelerate towards player
+            // Accelerate towards player in all dimensions (including depth)
             this.velocity.x += this.direction.x * 0.005;
             this.velocity.z += this.direction.z * 0.005;
+            
+            // Track player's depth (y-coordinate)
+            const depthDifference = playerSubmarine.position.y - this.mesh.position.y;
+            // Apply a smaller factor for vertical movement to make it more realistic
+            this.velocity.y += Math.sign(depthDifference) * 0.002;
             
             // If in attack range, fire torpedo occasionally
             if (distanceToPlayer < this.attackRange) {
@@ -214,8 +219,9 @@ class Enemy {
         // Apply random deviation to the target position based on accuracy
         const adjustedTarget = targetPosition.clone();
         
-        // Add random deviation to x and z coordinates (horizontal plane)
+        // Add random deviation to x, y, and z coordinates (3D space)
         adjustedTarget.x += (Math.random() - 0.5) * accuracyVariance;
+        adjustedTarget.y += (Math.random() - 0.5) * accuracyVariance * 0.5; // Less variance in depth for more accurate shots
         adjustedTarget.z += (Math.random() - 0.5) * accuracyVariance;
         
         // Calculate direction to the adjusted target
@@ -236,10 +242,10 @@ class Enemy {
     
     calculateAccuracyVariance(difficultyLevel) {
         // Scale from 1-5 difficulty
-        // Difficulty 1: Large variance (inaccurate) = 30
-        // Difficulty 5: Small variance (accurate) = 5
-        const maxVariance = 30;
-        const minVariance = 5;
+        // Difficulty 1: Large variance (inaccurate) = 15 (reduced from 30)
+        // Difficulty 5: Small variance (accurate) = 2 (reduced from 5)
+        const maxVariance = 15; // Reduced from 30 for better accuracy at low difficulty
+        const minVariance = 2;  // Reduced from 5 for better accuracy at high difficulty
         
         // Linear interpolation between max and min variance based on difficulty
         return maxVariance - ((difficultyLevel - 1) / 4) * (maxVariance - minVariance);
@@ -276,7 +282,7 @@ class Enemy {
 }
 
 // EnemyManager class to handle multiple enemies
-class EnemyManager {
+window.EnemyManager = class EnemyManager {
     constructor(scene, maxEnemies = 3) {
         this.scene = scene;
         this.enemies = [];
@@ -364,14 +370,10 @@ class EnemyManager {
         for (let i = this.enemyTorpedoes.length - 1; i >= 0; i--) {
             const torpedo = this.enemyTorpedoes[i];
             
-            // Move torpedo forward in its direction
+            // Move torpedo forward in its direction (including depth)
             torpedo.position.x += torpedo.direction.x * torpedo.speed;
+            torpedo.position.y += torpedo.direction.y * torpedo.speed;
             torpedo.position.z += torpedo.direction.z * torpedo.speed;
-            
-            // Apply slight downward trajectory underwater
-            if (torpedo.position.y < 0) {
-                torpedo.position.y -= 0.05;
-            }
             
             // Check for collision with player
             if (this.combatSystem && this.combatSystem.checkEnemyTorpedoHit(torpedo)) {
@@ -419,4 +421,4 @@ class EnemyManager {
     }
 }
 
-export { Enemy, EnemyManager };
+// Enemy and EnemyManager classes are now available globally as window.Enemy and window.EnemyManager

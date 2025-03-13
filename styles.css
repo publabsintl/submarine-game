@@ -124,3 +124,80 @@ body { margin: 0; overflow: hidden; background-color: #000; }
 .timescale-controls button:active {
     background-color: #222;
 }
+
+/* Radar Map */
+.radar-map {
+    width: 150px;
+    height: 150px;
+    background-color: rgba(0, 20, 40, 0.7);
+    border: 2px solid #0088cc;
+    border-radius: 50%;
+    position: relative;
+    margin: 10px auto;
+    overflow: hidden;
+}
+
+/* Radar container positioned in bottom right */
+#radar-container {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 15px;
+    border-radius: 10px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#radar-container .gauge-title {
+    font-size: 14px;
+    margin-bottom: 5px;
+    color: #aaa;
+    font-family: 'Courier New', monospace;
+}
+
+.radar-sweep {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    background: linear-gradient(90deg, rgba(0, 255, 0, 0.2) 0%, rgba(0, 255, 0, 0) 50%);
+    transform-origin: center;
+    animation: radar-sweep 4s infinite linear;
+}
+
+@keyframes radar-sweep {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Enemy blip on radar */
+.radar-blip {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background-color: #ff3333;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 5px #ff6666;
+}
+
+/* Player blip on radar */
+.radar-player {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background-color: #00ff00;
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 5px #66ff66;
+}

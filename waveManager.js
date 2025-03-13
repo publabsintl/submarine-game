@@ -1,7 +1,7 @@
 // Wave Manager Module for Submarine Game
 
 // Wave manager class to handle enemy wave spawning and progression
-class WaveManager {
+window.WaveManager = class WaveManager {
     constructor(scene, playerStats, difficultyLevel = 1) {
         this.scene = scene;
         this.playerStats = playerStats;
@@ -282,5 +282,4 @@ class WaveManager {
     }
 }
 
-// Export the WaveManager class
-export { WaveManager };
+// WaveManager class is now available globally as window.WaveManager

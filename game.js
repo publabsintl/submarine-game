@@ -1,10 +1,15 @@
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.module.js';
-import { PlayerStats } from './playerStats.js';
-import { CombatSystem } from './combatSystem.js';
-import { WaveManager } from './waveManager.js';
-import { PickupSystem } from './pickupSystem.js';
-import { EnvironmentSystem } from './environmentSystem.js';
-import { FishSystem } from './fishSystem.js';
+// Load THREE.js from CDN
+document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>');
+
+// We'll use global variables instead of imports
+// These scripts should be loaded before game.js in the HTML
+const THREE = window.THREE;
+const PlayerStats = window.PlayerStats;
+const CombatSystem = window.CombatSystem;
+const WaveManager = window.WaveManager;
+const PickupSystem = window.PickupSystem;
+const EnvironmentSystem = window.EnvironmentSystem;
+const FishSystem = window.FishSystem;
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -59,8 +64,8 @@ let targetY = -15; // Default submarine depth
 const waterLevel = 0;
 const islands = []; // Array to store island positions and sizes for collision detection
 
-// Global time scale to control animation speed (0.4 = slower speed)
-let timeScale = 0.4;
+// Global time scale to control animation speed (1.0 = normal speed)
+let timeScale = 1.0;
 
 // Game systems
 let playerStats;
@@ -77,7 +82,7 @@ let cameraDistance = 15; // Default camera distance
 let cameraHeight = 5; // Default camera height
 let currentCameraPosition = new THREE.Vector3();
 let targetCameraPosition = new THREE.Vector3();
-let cameraLerpFactor = 0.05; // Controls how quickly camera catches up (lower = more lag)
+let cameraLerpFactor = 0.03; // Controls how quickly camera catches up (lower = more lag)
 
 // Create water surface
 function createWaterSurface() {
@@ -454,10 +459,10 @@ function createSubmarine(color = 0x333344, playerName = null) {
     // Add physics properties
     submarine.velocity = new THREE.Vector3(0, 0, 0);
     submarine.direction = new THREE.Vector3(0, 0, 1); // Forward direction vector
-    submarine.rotationSpeed = 0.03;
-    submarine.maxSpeed = 0.3;
-    submarine.acceleration = 0.01;
-    submarine.drag = 0.98;
+    submarine.rotationSpeed = 0.02;
+    submarine.maxSpeed = 0.2;
+    submarine.acceleration = 0.005;
+    submarine.drag = 0.99;
     
     // Add player name if provided
     if (playerName) {
@@ -575,7 +580,7 @@ function fireTorpedo() {
     
     // Set torpedo direction based on submarine's direction
     torpedo.direction = submarine.direction.clone();
-    torpedo.speed = 1.0; // Torpedo speed
+    torpedo.speed = 0.6; // Torpedo speed - adjusted for new movement scale
     torpedo.lifeTime = 100; // How long the torpedo lives before disappearing
     
     // Add to scene and torpedoes array
@@ -1120,6 +1125,11 @@ function animate() {
         if (fishSystem) {
             fishSystem.update(0.016 * timeScale, submarine.position); // Apply time scale to fish update
         }
+        
+        // Update radar map if enemy manager exists
+        if (window.enemyManager && window.enemyManager.enemies) {
+            window.updateRadarMap(submarine, window.enemyManager.enemies);
+        }
     }
     
     // Render scene
@@ -1208,6 +1218,9 @@ function initGame(gameMode = 'single', playerSettings = null) {
     // Set up time scale UI buttons
     setupTimeScaleControls();
     
+    // Initialize radar map
+    initRadarMap();
+    
     // Handle window resize
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
@@ -1217,61 +1230,65 @@ function initGame(gameMode = 'single', playerSettings = null) {
     
     // Initialize enemy manager if in single player mode
     if (gameMode === 'single') {
-        // Import and initialize enemy manager
-        import('./enemies.js').then(({ EnemyManager }) => {
-            const enemyCount = playerSettings ? playerSettings.enemyCount : 3;
-            const enemyManager = new EnemyManager(scene, enemyCount);
-            
-            // Initialize combat system
-            combatSystem = new CombatSystem(scene, submarine, playerStats);
-            
-            // Initialize pickup system
-            pickupSystem = new PickupSystem(scene, playerStats);
-            pickupSystem.oceanFloorLevel = window.OCEAN_FLOOR_LEVEL;
-            pickupSystem.initialize();
-            
-            // Connect systems
-            enemyManager.setCombatSystem(combatSystem);
-            
-            // Initialize wave manager
-            waveManager = new WaveManager(scene, playerStats);
-            waveManager.setEnemyManager(enemyManager);
-            
-            // Initialize enemy manager
-            enemyManager.initialize();
-            
-            // Set up event listeners
-            setupGameEventListeners(enemyManager);
-            
-            // Start the first wave
-            waveManager.startGame();
-            
-            // Start animation loop
-            animate();
-            
-            // Update game systems in animation loop
-            const originalAnimate = animate;
-            animate = function() {
-                // Only run if game is active
-                if (gameActive) {
-                    originalAnimate();
+        // Initialize enemy manager
+        const enemyCount = playerSettings ? playerSettings.enemyCount : 3;
+        const enemyManager = new EnemyManager(scene, enemyCount);
+        
+        // Expose enemy manager to window object for radar functionality
+        window.enemyManager = enemyManager;
+        
+        // Initialize combat system
+        combatSystem = new CombatSystem(scene, submarine, playerStats);
+        
+        // Initialize pickup system
+        pickupSystem = new PickupSystem(scene, playerStats);
+        pickupSystem.oceanFloorLevel = window.OCEAN_FLOOR_LEVEL;
+        pickupSystem.initialize();
+        
+        // Connect systems
+        enemyManager.setCombatSystem(combatSystem);
+        
+        // Initialize wave manager
+        waveManager = new WaveManager(scene, playerStats);
+        waveManager.setEnemyManager(enemyManager);
+        
+        // Initialize enemy manager
+        enemyManager.initialize();
+        
+        // Set up event listeners
+        setupGameEventListeners(enemyManager);
+        
+        // Start the first wave
+        waveManager.startGame();
+        
+        // Start animation loop
+        animate();
+        
+        // Update game systems in animation loop
+        const originalAnimate = animate;
+        animate = function() {
+            // Only run if game is active
+            if (gameActive) {
+                originalAnimate();
+                
+                if (submarine) {
+                    // Update enemy manager
+                    enemyManager.update(submarine, 0.016); // Assuming ~60fps
                     
-                    if (submarine) {
-                        // Update enemy manager
-                        enemyManager.update(submarine, 0.016); // Assuming ~60fps
-                        
-                        // Update combat system
-                        combatSystem.update(enemyManager.enemies, torpedoes, 0.016);
-                        
-                        // Update pickup system
-                        pickupSystem.update(submarine, 0.016);
-                        
-                        // Update wave manager
-                        waveManager.update(0.016);
-                    }
+                    // Update combat system
+                    combatSystem.update(enemyManager.enemies, torpedoes, 0.016);
+                    
+                    // Update pickup system
+                    pickupSystem.update(submarine, 0.016);
+                    
+                    // Update wave manager
+                    waveManager.update(0.016);
+                    
+                    // Explicitly update radar map with enemy positions
+                    window.updateRadarMap(submarine, enemyManager.enemies);
                 }
-            };
-        });
+            }
+        };
     } else if (gameMode === 'multi') {
         // Multiplayer mode logic would go here
         // For now, just log that multiplayer is not yet implemented
@@ -1283,19 +1300,6 @@ function initGame(gameMode = 'single', playerSettings = null) {
     
     // Set up game over event listener
     document.addEventListener('gameOver', handleGameOver);
-    
-    // Add key handlers for time scale adjustment
-    document.addEventListener('keydown', function(event) {
-        if (event.key === '[') {
-            // Decrease time scale (slow down animations)
-            timeScale = Math.max(0.1, timeScale - 0.1);
-            console.log('Time Scale:', timeScale.toFixed(1));
-        } else if (event.key === ']') {
-            // Increase time scale (speed up animations)
-            timeScale = Math.min(2.0, timeScale + 0.1);
-            console.log('Time Scale:', timeScale.toFixed(1));
-        }
-    });
 }
 
 // Handle game over event
@@ -1434,8 +1438,89 @@ function updateTimeScaleUI() {
     console.log('Time Scale:', timeScale.toFixed(1));
 }
 
-// Export functions for use in index.html
-export { initGame };
+// Initialize radar map
+function initRadarMap() {
+    // Create the radar sweep effect
+    const radarSweep = document.createElement('div');
+    radarSweep.className = 'radar-sweep';
+    document.getElementById('radar-map').appendChild(radarSweep);
+    
+    // Add player blip to radar
+    const playerBlip = document.createElement('div');
+    playerBlip.className = 'radar-player';
+    document.getElementById('radar-map').appendChild(playerBlip);
+}
+
+// Update radar map with enemy positions
+window.updateRadarMap = function(submarine, enemies) {
+    // Update enemies counter
+    const enemiesValue = document.getElementById('enemies-value');
+    if (enemiesValue) {
+        enemiesValue.textContent = enemies.filter(enemy => !enemy.isDestroyed).length;
+    }
+    
+    // Get radar map element
+    const radarMap = document.getElementById('radar-map');
+    if (!radarMap) return;
+    
+    // Clear existing enemy blips
+    const existingBlips = radarMap.querySelectorAll('.radar-blip');
+    existingBlips.forEach(blip => blip.remove());
+    
+    // Get submarine rotation for radar orientation
+    const submarineRotationY = submarine.rotation.y;
+    
+    // Add enemy blips to radar
+    enemies.forEach(enemy => {
+        if (enemy.isDestroyed) return;
+        
+        // Calculate relative position from submarine to enemy
+        // Use enemy.mesh.position instead of enemy.position for accurate coordinates
+        const relX = enemy.mesh.position.x - submarine.position.x;
+        const relZ = enemy.mesh.position.z - submarine.position.z;
+        
+        // Calculate distance
+        const distance = Math.sqrt(relX * relX + relZ * relZ);
+        
+        // Skip enemies that are too far away
+        const radarRange = 100; // Radar range in game units
+        if (distance > radarRange) return;
+        
+        // Calculate angle relative to submarine's forward direction
+        let angle = Math.atan2(relX, relZ) - submarineRotationY;
+        
+        // Normalize angle to 0-2π
+        while (angle < 0) angle += Math.PI * 2;
+        while (angle > Math.PI * 2) angle -= Math.PI * 2;
+        
+        // Calculate radar position (75 is half the radar width of 150px)
+        const radarX = 75 + Math.sin(angle) * (distance / radarRange) * 75;
+        const radarZ = 75 - Math.cos(angle) * (distance / radarRange) * 75;
+        
+        // Create blip element
+        const blip = document.createElement('div');
+        blip.className = 'radar-blip';
+        blip.style.left = `${radarX}px`;
+        blip.style.top = `${radarZ}px`;
+        
+        // Add blip to radar
+        radarMap.appendChild(blip);
+        
+        // Add a pulse effect to make blips more visible
+        blip.style.animation = 'pulse 1.5s infinite';
+    });
+};
+
+// Add pulse animation to CSS
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes pulse {
+        0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.7; }
+        50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+        100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.7; }
+    }
+`;
+document.head.appendChild(style);
 
 // Make initGame available globally
 window.initGame = initGame;
