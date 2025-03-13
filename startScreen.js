@@ -4,6 +4,7 @@
 let playerName = "Captain";
 let submarineColor = 0x333344; // Default color
 let enemyCount = 3; // Default enemy count
+let difficultyLevel = 1; // Default difficulty (1-5)
 
 // Function to create and manage the start screen
 function createStartScreen() {
@@ -182,6 +183,7 @@ function showCustomizationScreen(startScreen) {
         // Save player settings
         playerName = nameInput.value || "Captain";
         enemyCount = parseInt(enemySelect.value);
+        difficultyLevel = parseInt(difficultySelect.value);
         
         // Remove customization screen
         document.body.removeChild(customScreen);
@@ -198,7 +200,8 @@ function showCustomizationScreen(startScreen) {
             initGame('single', {
                 playerName: playerName,
                 submarineColor: submarineColor,
-                enemyCount: enemyCount
+                enemyCount: enemyCount,
+                difficultyLevel: difficultyLevel
             });
         } else {
             console.error('initGame function not found');
@@ -213,10 +216,42 @@ function showCustomizationScreen(startScreen) {
         // Show start screen again
         startScreen.style.display = 'flex';
     });
+    // Difficulty selection
+    const difficultyGroup = document.createElement('div');
+    difficultyGroup.classList.add('form-group');
+    
+    const difficultyLabel = document.createElement('label');
+    difficultyLabel.textContent = 'Difficulty Level:';
+    
+    const difficultySelect = document.createElement('select');
+    difficultySelect.id = 'difficulty-level';
+    
+    const difficultyOptions = [
+        { value: 1, name: 'Easy - Inaccurate enemy torpedoes' },
+        { value: 2, name: 'Normal - Slightly inaccurate torpedoes' },
+        { value: 3, name: 'Hard - Moderately accurate torpedoes' },
+        { value: 4, name: 'Expert - Highly accurate torpedoes' },
+        { value: 5, name: 'Impossible - Perfect aim torpedoes' }
+    ];
+    
+    difficultyOptions.forEach(option => {
+        const optionElement = document.createElement('option');
+        optionElement.value = option.value;
+        optionElement.textContent = option.name;
+        if (option.value === difficultyLevel) {
+            optionElement.selected = true;
+        }
+        difficultySelect.appendChild(optionElement);
+    });
+    
+    difficultyGroup.appendChild(difficultyLabel);
+    difficultyGroup.appendChild(difficultySelect);
     
     // Add elements to form container
     formContainer.appendChild(nameGroup);
     formContainer.appendChild(colorGroup);
+    formContainer.appendChild(enemyGroup);
+    formContainer.appendChild(difficultyGroup);
     formContainer.appendChild(enemyGroup);
     
     // Create buttons container

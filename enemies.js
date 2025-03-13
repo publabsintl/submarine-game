@@ -201,15 +201,48 @@ class Enemy {
     }
     
     fireTorpedo(targetPosition) {
+        // Get the current difficulty level from the wave manager if available
+        let difficultyLevel = 1;
+        if (window.currentDifficultyLevel !== undefined) {
+            difficultyLevel = window.currentDifficultyLevel;
+        }
+        
+        // Calculate accuracy based on difficulty level (1-5)
+        // Higher difficulty = more accurate shots
+        const accuracyVariance = this.calculateAccuracyVariance(difficultyLevel);
+        
+        // Apply random deviation to the target position based on accuracy
+        const adjustedTarget = targetPosition.clone();
+        
+        // Add random deviation to x and z coordinates (horizontal plane)
+        adjustedTarget.x += (Math.random() - 0.5) * accuracyVariance;
+        adjustedTarget.z += (Math.random() - 0.5) * accuracyVariance;
+        
+        // Calculate direction to the adjusted target
+        const adjustedDirection = new THREE.Vector3()
+            .subVectors(adjustedTarget, this.mesh.position)
+            .normalize();
+        
         // Create a new torpedo event that the main game can handle
         const torpedoFiredEvent = new CustomEvent('enemyTorpedoFired', {
             detail: {
                 position: this.mesh.position.clone(),
-                direction: this.direction.clone(),
-                target: targetPosition.clone()
+                direction: adjustedDirection,
+                target: adjustedTarget
             }
         });
         document.dispatchEvent(torpedoFiredEvent);
+    }
+    
+    calculateAccuracyVariance(difficultyLevel) {
+        // Scale from 1-5 difficulty
+        // Difficulty 1: Large variance (inaccurate) = 30
+        // Difficulty 5: Small variance (accurate) = 5
+        const maxVariance = 30;
+        const minVariance = 5;
+        
+        // Linear interpolation between max and min variance based on difficulty
+        return maxVariance - ((difficultyLevel - 1) / 4) * (maxVariance - minVariance);
     }
     
     takeDamage(amount) {

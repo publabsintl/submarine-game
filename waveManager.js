@@ -7,6 +7,9 @@ class WaveManager {
         this.playerStats = playerStats;
         this.difficultyLevel = difficultyLevel;
         
+        // Make difficulty level globally accessible
+        window.currentDifficultyLevel = difficultyLevel;
+        
         // Wave properties
         this.currentWave = 1;
         this.enemiesPerWave = 1; // Start with 1 enemy
@@ -190,6 +193,13 @@ class WaveManager {
         
         // Increment wave counter
         this.currentWave++;
+        
+        // Potentially increase difficulty every few waves
+        if (this.currentWave % 3 === 0 && this.difficultyLevel < 5) {
+            this.difficultyLevel = Math.min(5, this.difficultyLevel + 0.5);
+            window.currentDifficultyLevel = this.difficultyLevel;
+            console.log(`Difficulty increased to: ${this.difficultyLevel}`);
+        }
         
         // Show wave complete message
         this.showWaveCompleteMessage();

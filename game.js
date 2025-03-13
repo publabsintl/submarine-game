@@ -1099,6 +1099,15 @@ function animate() {
 function initGame(gameMode = 'single', playerSettings = null) {
     console.log(`Initializing game in ${gameMode} mode`);
     
+    // Get difficulty level from player settings or default to 1
+    const difficultyLevel = playerSettings && playerSettings.difficultyLevel
+        ? playerSettings.difficultyLevel
+        : 1;
+    
+    // Set global difficulty level
+    window.currentDifficultyLevel = difficultyLevel;
+    console.log(`Game difficulty set to: ${difficultyLevel}`);
+    
     // Reset game state
     gameActive = true;
     torpedoes = [];
