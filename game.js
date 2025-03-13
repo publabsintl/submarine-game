@@ -62,7 +62,7 @@ let enemyTorpedoes = []; // Initialize enemy torpedoes array
 let keys = {}; // Changed from const to let
 let targetY = -15; // Default submarine depth
 const waterLevel = 0;
-const islands = []; // Array to store island positions and sizes for collision detection
+let islands = []; // Array to store island positions and sizes for collision detection
 
 // Global time scale to control animation speed (1.0 = normal speed)
 let timeScale = 1.0;
@@ -72,7 +72,6 @@ let playerStats;
 let combatSystem;
 let waveManager;
 let pickupSystem;
-let environmentSystem;
 let fishSystem;
 let gameActive = false;
 
@@ -268,22 +267,88 @@ function createSkybox() {
 }
 
 // Create environment objects
-function createEnvironmentObjects() {
-    // Ocean floor
-    const floorGeometry = new THREE.PlaneGeometry(1000, 1000);
-    const floorMaterial = new THREE.MeshPhongMaterial({ 
-        color: 0x553311, // Sandy brown
-        transparent: true, 
-        opacity: 0.8
+function createEnvironment() {
+    console.log("Creating environment objects with a single massive ocean floor");
+    
+    // Track islands for collision detection
+    let islandPositions = [];
+    
+    // ===== MASSIVE OCEAN FLOOR BASE LAYER =====
+    // Create a detailed sand texture for the ocean floor
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 4096; // Very high resolution for better detail
+    canvas.height = 4096;
+    
+    // Base sand color
+    ctx.fillStyle = '#e0c9a6'; // Warm sand color
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Add sand grain texture
+    ctx.globalAlpha = 0.6;
+    for (let i = 0; i < 300000; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        const size = Math.random() * 2 + 0.5;
+        const shade = Math.random() * 60;
+        
+        ctx.fillStyle = `rgb(${220 - shade}, ${190 - shade}, ${150 - shade})`;
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    
+    // Add some larger sand patterns
+    ctx.globalAlpha = 0.4;
+    for (let i = 0; i < 1000; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        const radius = Math.random() * 25 + 10;
+        
+        ctx.strokeStyle = '#c19a6b';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    
+    // Reset alpha
+    ctx.globalAlpha = 1.0;
+    
+    // Create texture from canvas
+    const sandTexture = new THREE.CanvasTexture(canvas);
+    sandTexture.wrapS = THREE.RepeatWrapping;
+    sandTexture.wrapT = THREE.RepeatWrapping;
+    sandTexture.repeat.set(50, 50); // Very large repeat for a massive area
+    
+    // Create ocean floor material with texture
+    const floorMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xffe0a0, // Bright sand color
+        map: sandTexture,
+        roughness: 0.7,
+        metalness: 0.1,
+        side: THREE.DoubleSide,
+        emissive: 0xffaa55, // Orange-yellow emissive
+        emissiveIntensity: 0.4
     });
     
+    // Create a single MASSIVE floor plane as the base layer
+    // Using an extremely large size to ensure it covers the entire playable area
+    const worldSize = 20000; // Extremely large to ensure complete coverage
+    const floorGeometry = new THREE.PlaneGeometry(worldSize, worldSize);
     const floor = new THREE.Mesh(floorGeometry, floorMaterial);
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -25;
-    scene.add(floor);
     
-    // Store ocean floor position as a global constant
+    // Add to scene and track in underwaterObjects array
+    scene.add(floor);
+    underwaterObjects.push(floor);
+    
+    console.log("Added massive ocean floor to scene:", floor);
+    
+    // Store ocean floor position as a global constant for collision detection
     window.OCEAN_FLOOR_LEVEL = floor.position.y;
+    console.log("Set OCEAN_FLOOR_LEVEL to:", window.OCEAN_FLOOR_LEVEL);
     
     // Rocks
     const rockGeometry = new THREE.SphereGeometry(2, 16, 16);
@@ -323,10 +388,16 @@ function createEnvironmentObjects() {
     }
     
     // Islands
-    createIsland(-40, -60, 10); // Large island
-    createIsland(50, 30, 8);    // Medium island
-    createIsland(-20, 40, 5);   // Small island
-    createIsland(70, -40, 6);   // Another island
+    createIsland(-40, -60, 10, islandPositions);  // Large island
+    createIsland(50, 30, 8, islandPositions);     // Medium island
+    createIsland(-20, 40, 5, islandPositions);    // Small island
+    createIsland(70, -40, 6, islandPositions);    // Another island
+    createIsland(-80, 15, 7, islandPositions);    // Medium island
+    createIsland(25, -75, 9, islandPositions);    // Large island 
+    createIsland(10, 65, 4, islandPositions);     // Small island
+    createIsland(-55, -25, 8, islandPositions);   // Medium-large island
+    createIsland(60, 50, 6, islandPositions);     // Medium island
+    createIsland(-5, 0, 11, islandPositions);     // Very large central island
     
     // Bubbles
     const bubbleCount = 100;
@@ -351,7 +422,11 @@ function createEnvironmentObjects() {
     scene.add(bubbles);
     underwaterObjects.push(bubbles);
     
-    return { floor, bubbles };
+    return { 
+        floorSegments: [floor], 
+        bubbles,
+        islands: islandPositions
+    };
 }
 
 function createCoral(x, z) {
@@ -379,7 +454,7 @@ function createPlant(x, z) {
     underwaterObjects.push(plant);
 }
 
-function createIsland(x, z, size) {
+function createIsland(x, z, size, islandArray) {
     // Island base (above water)
     const islandGeometry = new THREE.CylinderGeometry(size, size * 1.2, 1, 32);
     const islandMaterial = new THREE.MeshPhongMaterial({ color: 0xddbb88 }); // Sandy color
@@ -411,7 +486,11 @@ function createIsland(x, z, size) {
     }
     
     // Store island position and size for collision detection
-    islands.push({ x, z, size });
+    if (islandArray) {
+        islandArray.push({ x, z, size });
+    } else {
+        islands.push({ x, z, size });
+    }
 }
 
 function createPalmTree(x, z, size) {
@@ -836,7 +915,7 @@ function updateWaterAppearance(cameraY) {
         
         // Underwater fog (denser, blue-green)
         scene.fog.color.setHex(0x003366);
-        scene.fog.density = 0.015; // Significantly reduced fog density for better underwater visibility
+        scene.fog.density = 0.009; // Using the value from your previous improvements
         
         // Show the second water surface from below
         waterSurfaceFromBelow.visible = true;
@@ -866,7 +945,7 @@ function updateWaterAppearance(cameraY) {
         
         // Above water fog (less dense, sky blue)
         scene.fog.color.setHex(0x99D6FF);
-        scene.fog.density = 0.01;
+        scene.fog.density = 0.015; // Back to original value since you prefer it
         
         // Hide the second water surface from below
         waterSurfaceFromBelow.visible = false;
@@ -1158,14 +1237,11 @@ function initGame(gameMode = 'single', playerSettings = null) {
     createWaterSurface();
     createSkybox();
     
-    // Initialize enhanced environment system
-    environmentSystem = new EnvironmentSystem(scene);
-    const environmentObjects = environmentSystem.initialize();
+    // Initialize environment
+    const environmentObjects = createEnvironment();
     
     // Add environment objects to our tracking arrays
-    underwaterObjects.push(...environmentObjects.underwaterObjects);
-    aboveWaterObjects.push(...environmentObjects.aboveWaterObjects);
-    islands.push(...environmentObjects.islands);
+    islands = environmentObjects.islands || [];
     
     // Initialize fish system
     fishSystem = new FishSystem(scene);
