@@ -594,9 +594,7 @@ window.FishSystem = class FishSystem {
         // Apply timeScale to deltaTime
         const scaledDeltaTime = deltaTime * currentTimeScale;
         
-        // Debug log to check if update is being called
-        console.log("Updating fish system with timeScale:", currentTimeScale);
-        console.log("Updating fish system with timeScale:", timeScale);
+        // Debug logs removed to prevent console spam
         
         // Add player submarine as an obstacle
         const playerObstacle = {
