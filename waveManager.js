@@ -141,31 +141,59 @@ window.WaveManager = class WaveManager {
             this.playerStats.setWave(this.currentWave);
         }
         
-        // Show wave message
-        this.showWaveMessage();
-        
         // Set wave as active
         this.waveActive = true;
         this.waveStartTime = performance.now();
         
-        // Spawn enemies for this wave
+        // Show wave message
+        this.showWaveMessage();
+        
+        // Spawn enemies
         this.spawnWaveEnemies();
     }
     
     // Calculate how many enemies to spawn for the current wave
     calculateEnemiesForWave() {
-        // Base formula: wave number + difficulty modifier
-        // This creates a gradual increase in difficulty
-        this.enemiesPerWave = Math.min(
-            Math.floor(this.currentWave * this.difficultyLevel),
-            10 // Cap at 10 enemies per wave for performance
-        );
+        // Steeper progression curve with higher enemy counts
         
-        // Ensure at least 1 enemy
-        this.enemiesPerWave = Math.max(1, this.enemiesPerWave);
+        let baseEnemies;
         
-        // Set remaining enemies counter
-        this.enemiesRemaining = this.enemiesPerWave;
+        if (this.currentWave === 1) {
+            // First wave has 2 enemies
+            baseEnemies = 2;
+        } else if (this.currentWave === 2) {
+            // Second wave has 5 enemies
+            baseEnemies = 5;
+        } else if (this.currentWave === 3) {
+            // Third wave has 9 enemies
+            baseEnemies = 9;
+        } else if (this.currentWave <= 5) {
+            // Waves 4-5: follow exponential growth
+            // Wave 4: ~14 enemies, Wave 5: ~20 enemies
+            baseEnemies = Math.round(9 * Math.pow(1.5, this.currentWave - 3));
+        } else {
+            // Waves 6+: continue exponential growth but slower
+            // Roughly: 25, 30, 35, 40...
+            baseEnemies = Math.round(20 + 5 * (this.currentWave - 5));
+        }
+        
+        // Apply difficulty multiplier from settings
+        // Easy (1): 70% of base enemies
+        // Normal (2): 85% of base enemies
+        // Hard (3): 100% of base enemies
+        // Expert (4): 115% of base enemies
+        // Impossible (5): 130% of base enemies
+        const difficultyMultipliers = [0.7, 0.85, 1.0, 1.15, 1.3];
+        const difficultyIndex = Math.min(Math.max(Math.floor(this.difficultyLevel) - 1, 0), 4);
+        const difficultyMultiplier = difficultyMultipliers[difficultyIndex];
+        
+        // Calculate final enemy count (rounded to nearest integer)
+        const enemyCount = Math.round(baseEnemies * difficultyMultiplier);
+        
+        // Cap at 30 enemies per wave for performance
+        this.enemiesRemaining = Math.min(30, enemyCount);
+        
+        console.log(`Wave ${this.currentWave}: Spawning ${this.enemiesRemaining} enemies (Difficulty: ${this.difficultyLevel})`);
     }
     
     // Spawn enemies for the current wave
@@ -176,7 +204,7 @@ window.WaveManager = class WaveManager {
         this.enemyManager.clearEnemies();
         
         // Spawn new enemies for this wave
-        for (let i = 0; i < this.enemiesPerWave; i++) {
+        for (let i = 0; i < this.enemiesRemaining; i++) {
             // Stagger enemy spawning slightly for better gameplay
             setTimeout(() => {
                 if (this.waveActive) { // Only spawn if wave is still active
@@ -228,7 +256,31 @@ window.WaveManager = class WaveManager {
         const updateInterval = 100; // Update every 100ms for smooth countdown
         const secondsRemaining = Math.ceil(this.nextWaveCountdown / 1000);
         
-        this.countdownElement.textContent = `Next wave in ${secondsRemaining}...`;
+        // Calculate enemies for next wave without affecting current state
+        // This allows us to show the player what's coming
+        const nextWave = this.currentWave;
+        let nextWaveEnemies = 0;
+        
+        // Use the same logic as calculateEnemiesForWave but without modifying state
+        if (nextWave === 1) {
+            nextWaveEnemies = 2;
+        } else if (nextWave === 2) {
+            nextWaveEnemies = 5;
+        } else if (nextWave === 3) {
+            nextWaveEnemies = 9;
+        } else if (nextWave <= 5) {
+            nextWaveEnemies = Math.round(9 * Math.pow(1.5, nextWave - 3));
+        } else {
+            nextWaveEnemies = Math.round(20 + 5 * (nextWave - 5));
+        }
+        
+        // Apply difficulty multiplier
+        const difficultyMultipliers = [0.7, 0.85, 1.0, 1.15, 1.3];
+        const difficultyIndex = Math.min(Math.max(Math.floor(this.difficultyLevel) - 1, 0), 4);
+        const difficultyMultiplier = difficultyMultipliers[difficultyIndex];
+        nextWaveEnemies = Math.min(30, Math.round(nextWaveEnemies * difficultyMultiplier));
+        
+        this.countdownElement.textContent = `Wave ${nextWave} starting in ${secondsRemaining}s...`;
         
         this.nextWaveCountdown -= updateInterval;
         
@@ -245,7 +297,7 @@ window.WaveManager = class WaveManager {
         if (!container) return;
         
         this.waveMessageElement.textContent = `WAVE ${this.currentWave}`;
-        this.countdownElement.textContent = `Enemies: ${this.enemiesPerWave}`;
+        this.countdownElement.textContent = `Enemies: ${this.enemiesRemaining}`;
         
         container.classList.add('visible');
         

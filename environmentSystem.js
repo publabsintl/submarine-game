@@ -152,7 +152,7 @@ class EnvironmentSystem {
         const underwaterMaterial = new THREE.MeshPhongMaterial({ 
             color: 0x553311, 
             transparent: true,
-            opacity: 0.9
+            opacity: 1.0
         });
         const underwaterPart = new THREE.Mesh(underwaterGeometry, underwaterMaterial);
         underwaterPart.position.set(x, -12, z); // Below water

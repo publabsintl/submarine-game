@@ -96,10 +96,72 @@ window.Enemy = class Enemy {
         // Add to group
         group.add(nameSprite);
         
+        // Create health bar
+        this.healthBarCanvas = document.createElement('canvas');
+        this.healthBarContext = this.healthBarCanvas.getContext('2d');
+        this.healthBarCanvas.width = 100;
+        this.healthBarCanvas.height = 20;
+        
+        // Create initial health bar texture
+        this.updateHealthBar();
+        
+        // Create health bar sprite
+        this.healthBarTexture = new THREE.CanvasTexture(this.healthBarCanvas);
+        const healthBarMaterial = new THREE.SpriteMaterial({
+            map: this.healthBarTexture,
+            transparent: true
+        });
+        
+        this.healthBarSprite = new THREE.Sprite(healthBarMaterial);
+        this.healthBarSprite.scale.set(4 * this.size, 0.8 * this.size, 1);
+        this.healthBarSprite.position.set(0, 4 * this.size, 0); // Position above name
+        
+        // Add health bar to group
+        group.add(this.healthBarSprite);
+        
         // Set initial position
         group.position.copy(this.position);
         
         return group;
+    }
+    
+    updateHealthBar() {
+        const ctx = this.healthBarContext;
+        const width = this.healthBarCanvas.width;
+        const height = this.healthBarCanvas.height;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, width, height);
+        
+        // Draw background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(0, 0, width, height);
+        
+        // Calculate health percentage
+        const healthPercent = Math.max(0, this.health) / 100;
+        const barWidth = width * healthPercent;
+        
+        // Choose color based on health percentage
+        if (healthPercent > 0.6) {
+            ctx.fillStyle = '#00FF00'; // Green
+        } else if (healthPercent > 0.3) {
+            ctx.fillStyle = '#FFFF00'; // Yellow
+        } else {
+            ctx.fillStyle = '#FF0000'; // Red
+        }
+        
+        // Draw health bar
+        ctx.fillRect(0, 0, barWidth, height);
+        
+        // Add border
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(0, 0, width, height);
+        
+        // Update texture if it exists
+        if (this.healthBarTexture) {
+            this.healthBarTexture.needsUpdate = true;
+        }
     }
     
     update(playerSubmarine, deltaTime) {
@@ -254,6 +316,9 @@ window.Enemy = class Enemy {
     takeDamage(amount) {
         this.health -= amount;
         
+        // Update health bar appearance
+        this.updateHealthBar();
+        
         if (this.health <= 0 && !this.isDestroyed) {
             this.destroy();
         }
@@ -283,10 +348,10 @@ window.Enemy = class Enemy {
 
 // EnemyManager class to handle multiple enemies
 window.EnemyManager = class EnemyManager {
-    constructor(scene, maxEnemies = 3) {
+    constructor(scene, maxEnemies = 25) {
         this.scene = scene;
         this.enemies = [];
-        this.maxEnemies = maxEnemies;
+        this.maxEnemies = maxEnemies; // Set a high default max for wave system
         this.spawnInterval = 20000; // 20 seconds between spawns (used in auto-spawn mode)
         this.lastSpawnTime = 0;
         this.enemyTorpedoes = []; // Track enemy torpedoes
@@ -344,10 +409,11 @@ window.EnemyManager = class EnemyManager {
     }
     
     spawnEnemy() {
-        if (this.enemies.length < this.maxEnemies) {
-            const enemy = new Enemy(this.scene);
-            this.enemies.push(enemy);
-        }
+        // No limit check here - we trust the wave manager to call this
+        // the correct number of times based on the current wave
+        const enemy = new Enemy(this.scene);
+        this.enemies.push(enemy);
+        return enemy;
     }
     
     update(playerSubmarine, deltaTime) {

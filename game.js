@@ -1060,9 +1060,8 @@ function initGame(gameMode = 'single', playerSettings = null) {
     
     // Initialize enemy manager if in single player mode
     if (gameMode === 'single') {
-        // Initialize enemy manager
-        const enemyCount = playerSettings ? playerSettings.enemyCount : 3;
-        const enemyManager = new EnemyManager(scene, enemyCount);
+        // Initialize enemy manager with default enemies (actual count is managed by wave manager)
+        const enemyManager = new EnemyManager(scene);
         
         // Expose enemy manager to window object for radar functionality
         window.enemyManager = enemyManager;
@@ -1078,8 +1077,8 @@ function initGame(gameMode = 'single', playerSettings = null) {
         // Connect systems
         enemyManager.setCombatSystem(combatSystem);
         
-        // Initialize wave manager
-        waveManager = new WaveManager(scene, playerStats);
+        // Initialize wave manager with difficulty
+        waveManager = new WaveManager(scene, playerStats, difficultyLevel);
         waveManager.setEnemyManager(enemyManager);
         
         // Initialize enemy manager

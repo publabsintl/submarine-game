@@ -3,7 +3,6 @@
 // Global variables to store player settings
 let playerName = "Captain";
 let submarineColor = 0x333344; // Default color
-let enemyCount = 3; // Default enemy count
 let difficultyLevel = 1; // Default difficulty (1-5)
 
 // Function to create and manage the start screen
@@ -155,67 +154,6 @@ function showCustomizationScreen(startScreen) {
     colorGroup.appendChild(colorLabel);
     colorGroup.appendChild(colorOptions);
     
-    // Enemy count selection
-    const enemyGroup = document.createElement('div');
-    enemyGroup.classList.add('form-group');
-    
-    const enemyLabel = document.createElement('label');
-    enemyLabel.textContent = 'Enemy Count:';
-    
-    const enemySelect = document.createElement('select');
-    enemySelect.id = 'enemy-count';
-    
-    for (let i = 1; i <= 5; i++) {
-        const option = document.createElement('option');
-        option.value = i;
-        option.textContent = i;
-        if (i === enemyCount) {
-            option.selected = true;
-        }
-        enemySelect.appendChild(option);
-    }
-    
-    enemyGroup.appendChild(enemyLabel);
-    enemyGroup.appendChild(enemySelect);
-    
-    // Start game button
-    const startButton = createButton('Start Mission', () => {
-        // Save player settings
-        playerName = nameInput.value || "Captain";
-        enemyCount = parseInt(enemySelect.value);
-        difficultyLevel = parseInt(difficultySelect.value);
-        
-        // Remove customization screen
-        document.body.removeChild(customScreen);
-        
-        // Show dashboard and controls
-        const dashboard = document.getElementById('dashboard');
-        const controlsInfo = document.getElementById('controls-info');
-        
-        if (dashboard) dashboard.style.display = 'flex';
-        if (controlsInfo) controlsInfo.style.display = 'block';
-        
-        // Initialize the game with player settings
-        if (typeof initGame === 'function') {
-            initGame('single', {
-                playerName: playerName,
-                submarineColor: submarineColor,
-                enemyCount: enemyCount,
-                difficultyLevel: difficultyLevel
-            });
-        } else {
-            console.error('initGame function not found');
-        }
-    });
-    
-    // Back button
-    const backButton = createButton('Back', () => {
-        // Remove customization screen
-        document.body.removeChild(customScreen);
-        
-        // Show start screen again
-        startScreen.style.display = 'flex';
-    });
     // Difficulty selection
     const difficultyGroup = document.createElement('div');
     difficultyGroup.classList.add('form-group');
@@ -247,12 +185,47 @@ function showCustomizationScreen(startScreen) {
     difficultyGroup.appendChild(difficultyLabel);
     difficultyGroup.appendChild(difficultySelect);
     
+    // Start game button
+    const startButton = createButton('Start Mission', () => {
+        // Save player settings
+        playerName = nameInput.value || "Captain";
+        difficultyLevel = parseInt(difficultySelect.value);
+        
+        // Remove customization screen
+        document.body.removeChild(customScreen);
+        
+        // Show dashboard and controls
+        const dashboard = document.getElementById('dashboard');
+        const controlsInfo = document.getElementById('controls-info');
+        
+        if (dashboard) dashboard.style.display = 'flex';
+        if (controlsInfo) controlsInfo.style.display = 'block';
+        
+        // Initialize the game with player settings
+        if (typeof initGame === 'function') {
+            initGame('single', {
+                playerName: playerName,
+                submarineColor: submarineColor,
+                difficultyLevel: difficultyLevel
+            });
+        } else {
+            console.error('initGame function not found');
+        }
+    });
+    
+    // Back button
+    const backButton = createButton('Back', () => {
+        // Remove customization screen
+        document.body.removeChild(customScreen);
+        
+        // Show start screen again
+        startScreen.style.display = 'flex';
+    });
+    
     // Add elements to form container
     formContainer.appendChild(nameGroup);
     formContainer.appendChild(colorGroup);
-    formContainer.appendChild(enemyGroup);
     formContainer.appendChild(difficultyGroup);
-    formContainer.appendChild(enemyGroup);
     
     // Create buttons container
     const buttonsContainer = document.createElement('div');
