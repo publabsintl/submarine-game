@@ -4,9 +4,170 @@
     <meta charset="UTF-8">
     <title>Advanced Submarine Battle Simulator</title>
     <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        #controls-info {
+            display: none; /* Hide the controls info box */
+        }
+        
+        #controls-button-container {
+            display: none; /* Hide the controls button container */
+        }
+        
+        #open-controls {
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        #open-controls:hover {
+            background-color: #0088ff;
+        }
+        
+        /* Controls Modal Styles */
+        #controls-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .controls-modal-content {
+            background-color: rgba(0, 20, 40, 0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 600px;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(100, 200, 255, 0.3);
+        }
+        
+        .controls-modal-content h2 {
+            margin-top: 0;
+            color: #66ccff;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        
+        .controls-list {
+            text-align: left;
+            margin: 20px 0;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        
+        .controls-list div {
+            margin-bottom: 10px;
+        }
+        
+        .key {
+            background-color: #333;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-right: 5px;
+            font-family: monospace;
+            border: 1px solid #555;
+        }
+        
+        .close-modal {
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin-top: 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        
+        .close-modal:hover {
+            background-color: #0088ff;
+        }
+        
+        #start-screen, #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 100;
+        }
+        
+        #health-bar-container, #ammo-display, #wave-display, #score-display {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Arial', sans-serif;
+            z-index: 10;
+        }
+        
+        #leaderboard-button-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 100; /* Increased z-index to ensure it's above other elements */
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 5px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        
+        #open-leaderboard {
+            background-color: #009933;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        #open-leaderboard:hover {
+            background-color: #00cc44;
+        }
+        
+        #health-bar-container {
+            top: 20px;
+            left: 20px;
+            width: 200px;
+        }
+    </style>
 </head>
 <body>
-    <div id="controls-info">Controls: Arrow keys to move, T to surface, G to dive, SPACE to shoot torpedoes, C to toggle camera mode, +/- to adjust camera distance, L to toggle spotlight, [ and ] to adjust game speed</div>
+    <div id="controls-info">Arrow keys to move, T to surface, G to dive, SPACE to shoot torpedoes, C to toggle camera mode, +/- to adjust camera distance, L to toggle spotlight, [ and ] to adjust game speed</div>
     
     <div id="dashboard">
         <div class="gauge">
@@ -49,20 +210,40 @@
         <div id="radar-map" class="radar-map"></div>
     </div>
     
+    <div id="leaderboard-button-container">
+        <button id="open-leaderboard">LEADERBOARD</button>
+    </div>
+    
+    <!-- Controls Modal -->
+    <div id="controls-modal">
+        <div class="controls-modal-content">
+            <h2>Game Controls</h2>
+            <div class="controls-list">
+                <div><span class="key">↑</span> <span class="key">↓</span> <span class="key">←</span> <span class="key">→</span> Move submarine</div>
+                <div><span class="key">T</span> Surface</div>
+                <div><span class="key">G</span> Dive</div>
+                <div><span class="key">Space</span> Fire torpedo</div>
+                <div><span class="key">C</span> Toggle camera mode</div>
+                <div><span class="key">+</span> <span class="key">-</span> Adjust camera distance</div>
+                <div><span class="key">L</span> Toggle spotlight</div>
+                <div><span class="key">[</span> <span class="key">]</span> Adjust game speed</div>
+            </div>
+            <button class="close-modal">Close</button>
+        </div>
+    </div>
+    
     <!-- Load all scripts in the correct order -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js?v=1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.6/dist/umd/supabase.min.js"></script>
     <script src="playerStats.js?v=1"></script>
     <script src="combatSystem.js?v=1"></script>
     <script src="waveManager.js?v=1"></script>
-    <script src="pickupSystem.js?v=1"></script>
-    <script src="environmentSystem.js?v=1"></script>
     <script src="fishSystem.js?v=1"></script>
+    <script src="pickupSystem.js?v=1"></script>
+    <script src="supabaseManager.js"></script>
+    <script src="environmentSystem.js?v=1"></script>
     <script src="enemies.js?v=1"></script>
-    <script>
-        // Add timestamp to prevent caching
-        document.write('<script src="game.js?v=' + new Date().getTime() + '"><\/script>');
-    </script>
-    <!-- Add our start screen -->
+    <script src="game.js?v=1"></script>
     <script src="startScreen.js?v=1"></script>
     <script>
         // Initialize the start screen when the DOM is loaded

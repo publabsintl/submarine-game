@@ -2,7 +2,10 @@
 
 // Player stats class to manage health, ammo, and lives
 window.PlayerStats = class PlayerStats {
-    constructor(initialHealth = 100, initialAmmo = 100, initialLives = 3) {
+    constructor(initialHealth = 100, initialAmmo = 100, initialLives = 3, playerName = "Anonymous") {
+        // Player identity
+        this.playerName = playerName;
+        
         // Core stats
         this.maxHealth = initialHealth;
         this.health = initialHealth;
@@ -14,15 +17,19 @@ window.PlayerStats = class PlayerStats {
         // Game stats
         this.currentWave = 1;
         this.highestWave = 1;
+        this.score = 0; // Initialize score
         
         // UI elements
         this.healthDisplay = null;
         this.ammoDisplay = null;
         this.livesDisplay = null;
         this.waveDisplay = null;
+        this.scoreDisplay = null;
         
         // Initialize UI
         this.createStatsUI();
+        
+        console.log(`PlayerStats initialized for player: ${this.playerName}`);
     }
     
     // Create UI elements for displaying stats
@@ -44,18 +51,23 @@ window.PlayerStats = class PlayerStats {
         this.ammoDisplay = ammoGauge.querySelector('.gauge-value');
         
         // Add lives display
-        const livesGauge = this.createGauge('LIVES', 'lives-value', this.lives);
+        const livesGauge = this.createGauge('LIVES', 'lives-value', this.lives.toString());
         this.livesDisplay = livesGauge.querySelector('.gauge-value');
         
         // Add wave display
-        const waveGauge = this.createGauge('WAVE', 'wave-value', this.currentWave);
+        const waveGauge = this.createGauge('WAVE', 'wave-value', this.currentWave.toString());
         this.waveDisplay = waveGauge.querySelector('.gauge-value');
+        
+        // Add score display
+        const scoreGauge = this.createGauge('SCORE', 'score-value', this.score.toString());
+        this.scoreDisplay = scoreGauge.querySelector('.gauge-value');
         
         // Add gauges to dashboard
         dashboard.appendChild(healthGauge);
         dashboard.appendChild(ammoGauge);
         dashboard.appendChild(livesGauge);
         dashboard.appendChild(waveGauge);
+        dashboard.appendChild(scoreGauge);
     }
     
     // Helper function to create a gauge element
@@ -80,31 +92,36 @@ window.PlayerStats = class PlayerStats {
     
     // Update all UI elements
     updateUI() {
-        if (this.healthDisplay) this.healthDisplay.textContent = `${this.health}/${this.maxHealth}`;
-        if (this.ammoDisplay) this.ammoDisplay.textContent = `${this.ammo}/${this.maxAmmo}`;
-        if (this.livesDisplay) this.livesDisplay.textContent = this.lives;
-        if (this.waveDisplay) this.waveDisplay.textContent = this.currentWave;
-        
-        // Update health display color based on health percentage
         if (this.healthDisplay) {
-            const healthPercent = this.health / this.maxHealth;
-            if (healthPercent <= 0.2) {
-                this.healthDisplay.style.color = '#ff0000'; // Red for critical health
-            } else if (healthPercent <= 0.5) {
-                this.healthDisplay.style.color = '#ffaa00'; // Orange for low health
-            } else {
-                this.healthDisplay.style.color = '#ffffff'; // White for normal health
+            this.healthDisplay.textContent = `${Math.floor(this.health)}/${this.maxHealth}`;
+            
+            // Update health bar color based on health percentage
+            const healthPercentage = this.health / this.maxHealth;
+            let healthColor = '#00cc00'; // Green
+            
+            if (healthPercentage < 0.3) {
+                healthColor = '#cc0000'; // Red
+            } else if (healthPercentage < 0.6) {
+                healthColor = '#cccc00'; // Yellow
             }
+            
+            this.healthDisplay.style.color = healthColor;
         }
         
-        // Update ammo display color when low
         if (this.ammoDisplay) {
-            const ammoPercent = this.ammo / this.maxAmmo;
-            if (ammoPercent <= 0.2) {
-                this.ammoDisplay.style.color = '#ffaa00'; // Orange for low ammo
-            } else {
-                this.ammoDisplay.style.color = '#ffffff'; // White for normal ammo
-            }
+            this.ammoDisplay.textContent = `${this.ammo}/${this.maxAmmo}`;
+        }
+        
+        if (this.livesDisplay) {
+            this.livesDisplay.textContent = this.lives.toString();
+        }
+        
+        if (this.waveDisplay) {
+            this.waveDisplay.textContent = this.currentWave.toString();
+        }
+        
+        if (this.scoreDisplay) {
+            this.scoreDisplay.textContent = this.score.toLocaleString();
         }
     }
     
@@ -184,10 +201,17 @@ window.PlayerStats = class PlayerStats {
         this.showMessage(`GAME OVER! Highest Wave: ${this.highestWave}`, 5000);
     }
     
-    // Set current wave
+    // Add points to score
+    addScore(points) {
+        this.score += points;
+        this.updateUI();
+    }
+    
+    // Set wave and update score
     setWave(waveNumber) {
         this.currentWave = waveNumber;
-        this.highestWave = Math.max(this.highestWave, waveNumber);
+        // Add bonus points for reaching a new wave
+        this.addScore(waveNumber * 100);
         this.updateUI();
     }
     

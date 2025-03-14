@@ -9,6 +9,7 @@ const CombatSystem = window.CombatSystem;
 const WaveManager = window.WaveManager;
 const PickupSystem = window.PickupSystem;
 const FishSystem = window.FishSystem;
+const SupabaseManager = window.SupabaseManager;
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -66,13 +67,19 @@ let islands = []; // Array to store island positions and sizes for collision det
 // Global time scale to control animation speed (1.0 = normal speed)
 let timeScale = 1.0;
 
+// Game state variables
+let gameActive = false;
+let gamePaused = false;
+let gameStartTime = 0;
+let supabaseManager = null; // Instance of the Supabase Manager
+let playerStats = null;
+let animationFrameId = null;
+
 // Game systems
-let playerStats;
 let combatSystem;
 let waveManager;
 let pickupSystem;
 let fishSystem;
-let gameActive = false;
 
 // Camera variables
 let cameraMode = 'follow'; // 'follow' or 'distant'
@@ -895,15 +902,32 @@ function updateUI() {
 }
 
 // Animation loop
+let lastTime;
 function animate() {
-    requestAnimationFrame(animate);
+    // Request next frame
+    animationFrameId = requestAnimationFrame(animate);
     
-    const time = performance.now() * 0.001; // Convert to seconds
+    // Skip updates if game is not active or is paused
+    if (!gameActive || gamePaused) {
+        return;
+    }
+    
+    // Update delta time
+    const currentTime = performance.now();
+    
+    // Initialize lastTime if not set
+    if (typeof lastTime === 'undefined') {
+        lastTime = currentTime;
+        return; // Skip first frame to establish timing
+    }
+    
+    const deltaTime = (currentTime - lastTime) / 1000;
+    lastTime = currentTime;
     
     // Only update when game is active
     if (gameActive) {
         // Apply time scale to all animations that use deltaTime
-        const deltaTime = 0.016 * timeScale; // 60fps with time scale applied
+        const deltaTimeWithScale = deltaTime * timeScale;
         
         // Update controls and submarine position
         if (submarine) {
@@ -918,11 +942,11 @@ function animate() {
         }
         
         // Water animations
-        animateWater(time * timeScale);
+        animateWater(currentTime * 0.001);
         
         // Sky animations - only if above water
         if (camera.position.y > waterLevel) {
-            animateClouds(time * timeScale);
+            animateClouds(currentTime * 0.001);
         }
         
         // Update water appearance
@@ -936,12 +960,12 @@ function animate() {
         
         // Update fish system
         if (fishSystem) {
-            fishSystem.update(0.016 * timeScale, submarine.position); // Apply time scale to fish update
+            fishSystem.update(deltaTimeWithScale, submarine.position); // Apply time scale to fish update
         }
         
         // Update environment system
         if (window.environmentSystem) {
-            window.environmentSystem.update(0.016 * timeScale, submarine.position); // Apply time scale to environment update
+            window.environmentSystem.update(deltaTimeWithScale, submarine.position); // Apply time scale to environment update
         }
         
         // Update radar map if enemy manager exists
@@ -967,6 +991,14 @@ function initGame(gameMode = 'single', playerSettings = null) {
     window.currentDifficultyLevel = difficultyLevel;
     console.log(`Game difficulty set to: ${difficultyLevel}`);
     
+    // Initialize player stats early
+    playerStats = new window.PlayerStats(
+        100, // Initial health
+        100, // Initial ammo
+        3,   // Initial lives
+        playerSettings && playerSettings.playerName ? playerSettings.playerName : "Anonymous"
+    );
+    
     // Reset game state
     gameActive = true;
     torpedoes = [];
@@ -975,6 +1007,13 @@ function initGame(gameMode = 'single', playerSettings = null) {
     // Create water and sky
     createWaterSurface();
     createSkybox();
+    
+    // Create submarine with player settings if provided
+    if (playerSettings && gameMode === 'single') {
+        createSubmarine(playerSettings.submarineColor, playerSettings.playerName);
+    } else {
+        createSubmarine();
+    }
     
     // Initialize environment using EnvironmentSystem
     console.log("Creating environment using EnvironmentSystem");
@@ -1001,20 +1040,6 @@ function initGame(gameMode = 'single', playerSettings = null) {
     fishSystem = new FishSystem(scene);
     fishSystem.setObstacles(islands);
     fishSystem.initialize(150); // Create 150 fish of various species
-    
-    // Initialize player stats system
-    playerStats = new PlayerStats(
-        100, // Initial health
-        100, // Initial ammo
-        3    // Initial lives
-    );
-    
-    // Create submarine with player settings if provided
-    if (playerSettings && gameMode === 'single') {
-        createSubmarine(playerSettings.submarineColor, playerSettings.playerName);
-    } else {
-        createSubmarine();
-    }
     
     // Initialize camera position
     if (submarine) {
@@ -1065,6 +1090,17 @@ function initGame(gameMode = 'single', playerSettings = null) {
         
         // Expose enemy manager to window object for radar functionality
         window.enemyManager = enemyManager;
+        
+        // Make sure playerStats is initialized before creating combat system
+        if (!playerStats) {
+            playerStats = new window.PlayerStats(
+                100, // Initial health
+                100, // Initial ammo
+                3,   // Initial lives
+                playerSettings && playerSettings.playerName ? playerSettings.playerName : "Anonymous"
+            );
+            playerStats.updateUI();
+        }
         
         // Initialize combat system
         combatSystem = new CombatSystem(scene, submarine, playerStats);
@@ -1129,11 +1165,90 @@ function initGame(gameMode = 'single', playerSettings = null) {
     
     // Set up game over event listener
     document.addEventListener('gameOver', handleGameOver);
+    
+    // Set up leaderboard button event listener
+    const leaderboardButton = document.getElementById('open-leaderboard');
+    if (leaderboardButton) {
+        leaderboardButton.addEventListener('click', () => {
+            if (supabaseManager) {
+                supabaseManager.showLeaderboardModal();
+            }
+        });
+    }
+    
+    // Set up controls modal close button
+    const controlsModal = document.getElementById('controls-modal');
+    const closeButton = controlsModal ? controlsModal.querySelector('.close-modal') : null;
+    if (closeButton) {
+        closeButton.addEventListener('click', () => {
+            controlsModal.style.display = 'none';
+        });
+        
+        // Close modal when clicking outside content
+        controlsModal.addEventListener('click', (event) => {
+            if (event.target === controlsModal) {
+                controlsModal.style.display = 'none';
+            }
+        });
+        
+        // Close modal when ESC key is pressed
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && controlsModal.style.display === 'flex') {
+                controlsModal.style.display = 'none';
+            }
+        });
+    }
+    
+    // Initialize Supabase Manager
+    supabaseManager = new SupabaseManager();
+    gameStartTime = new Date().getTime();
+    
+    // Make sure UI is updated
+    if (playerStats) {
+        playerStats.updateUI();
+    }
 }
 
 // Handle game over event
 function handleGameOver(event) {
+    console.log('Game over event received:', event.detail);
     gameActive = false;
+    
+    // Calculate play time in seconds
+    const playTimeSeconds = Math.floor((new Date().getTime() - gameStartTime) / 1000);
+    
+    // If we have a Supabase manager, submit the score
+    if (supabaseManager) {
+        console.log('Attempting to submit score to leaderboard...');
+        // Get player name from playerStats
+        const playerName = playerStats.playerName || 'Anonymous';
+        
+        console.log('Player stats:', playerStats);
+        console.log('Current difficulty level:', window.currentDifficultyLevel);
+        console.log('Play time seconds:', playTimeSeconds);
+        console.log('Wave reached:', event.detail.wave);
+            
+        // Submit score to leaderboard - ensure score is not null
+        supabaseManager.setCurrentPlayer(playerName, window.currentDifficultyLevel);
+        supabaseManager.submitScore(
+            playerStats.score || 0, 
+            event.detail.wave, 
+            playTimeSeconds,
+            'single' // Game mode - will be useful for multiplayer in the future
+        ).then(result => {
+            console.log('Score submitted to leaderboard:', result);
+        }).catch(error => {
+            console.error('Failed to submit score:', error);
+        });
+    } else {
+        console.error('Supabase manager not initialized, cannot submit score');
+    }
+    
+    // Remove any existing game over screen
+    const existingGameOverScreen = document.getElementById('game-over-screen');
+    if (existingGameOverScreen) {
+        document.body.removeChild(existingGameOverScreen);
+    }
     
     // Show game over screen
     const gameOverScreen = document.createElement('div');
@@ -1141,8 +1256,14 @@ function handleGameOver(event) {
     gameOverScreen.innerHTML = `
         <h2>GAME OVER</h2>
         <p>You reached Wave ${event.detail.wave}</p>
-        <p>Highest Wave: ${event.detail.highestWave}</p>
-        <button id="restart-button">Play Again</button>
+        <p>Highest Wave: ${event.detail.highestWave || event.detail.wave}</p>
+        <p>Final Score: ${(playerStats.score || 0).toLocaleString()}</p>
+        <p>Play Time: ${formatPlayTime(playTimeSeconds)}</p>
+        <div class="game-over-buttons">
+            <button id="leaderboard-button">View Leaderboard</button>
+            <button id="restart-button">Play Again</button>
+            <button id="return-button">Return to Start</button>
+        </div>
     `;
     
     // Add CSS for game over screen
@@ -1173,35 +1294,234 @@ function handleGameOver(event) {
             margin: 10px 0;
         }
         
-        #restart-button {
+        .game-over-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        #restart-button, #leaderboard-button, #return-button {
             background-color: #0066cc;
             color: white;
             border: none;
             padding: 15px 30px;
             font-size: 18px;
-            margin-top: 20px;
             cursor: pointer;
             border-radius: 5px;
             transition: background-color 0.3s;
         }
         
+        #leaderboard-button {
+            background-color: #009933;
+        }
+        
+        #return-button {
+            background-color: #cc6600;
+        }
+        
         #restart-button:hover {
             background-color: #0088ff;
         }
+        
+        #leaderboard-button:hover {
+            background-color: #00cc44;
+        }
+        
+        #return-button:hover {
+            background-color: #ff8800;
+        }
     `;
-    document.head.appendChild(style);
     
-    // Add to body
+    document.head.appendChild(style);
     document.body.appendChild(gameOverScreen);
     
-    // Add restart button event listener
+    // Add event listeners for buttons
     document.getElementById('restart-button').addEventListener('click', () => {
         // Remove game over screen
         document.body.removeChild(gameOverScreen);
         
-        // Restart game
-        initGame('single');
+        // Reset game state
+        resetGame();
+        
+        // Start a new game directly with the same settings
+        if (typeof initGame === 'function') {
+            initGame('single', {
+                playerName: playerStats.playerName,
+                submarineColor: submarine ? submarine.color : 0x0000ff,
+                difficultyLevel: window.currentDifficultyLevel || 1
+            });
+        } else {
+            console.error('initGame function not found');
+            showStartScreen();
+        }
     });
+    
+    document.getElementById('return-button').addEventListener('click', () => {
+        // Remove game over screen
+        document.body.removeChild(gameOverScreen);
+        
+        // Reset game state
+        resetGame();
+        
+        // Show start screen
+        showStartScreen();
+    });
+    
+    document.getElementById('leaderboard-button').addEventListener('click', () => {
+        if (supabaseManager) {
+            // Hide game over screen temporarily
+            gameOverScreen.style.display = 'none';
+            
+            // Store a reference to the original supabaseManager.showLeaderboardModal function
+            const originalShowLeaderboardModal = supabaseManager.showLeaderboardModal;
+            
+            // Override the function temporarily to add our custom behavior
+            supabaseManager.showLeaderboardModal = async function() {
+                try {
+                    // Call the original function
+                    await originalShowLeaderboardModal.call(this);
+                    
+                    // Get the modal element that was just created
+                    const leaderboardModal = document.getElementById('leaderboard-modal');
+                    if (leaderboardModal) {
+                        // Find the close button
+                        const closeButton = leaderboardModal.querySelector('button');
+                        if (closeButton) {
+                            // Store the original onclick handler
+                            const originalOnClick = closeButton.onclick;
+                            
+                            // Override the onclick handler
+                            closeButton.onclick = function() {
+                                // Call the original handler to close the modal
+                                if (originalOnClick) {
+                                    originalOnClick.call(this);
+                                }
+                                
+                                // Show the game over screen again with proper positioning
+                                gameOverScreen.style.display = 'block';
+                                
+                                // Ensure the game over screen is properly positioned
+                                gameOverScreen.style.position = 'absolute';
+                                gameOverScreen.style.top = '50%';
+                                gameOverScreen.style.left = '50%';
+                                gameOverScreen.style.transform = 'translate(-50%, -50%)';
+                                gameOverScreen.style.zIndex = '2000';
+                                
+                                // Restore the original showLeaderboardModal function
+                                supabaseManager.showLeaderboardModal = originalShowLeaderboardModal;
+                            };
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error showing leaderboard:', error);
+                    // Show the game over screen again in case of error
+                    gameOverScreen.style.display = 'block';
+                    // Restore the original showLeaderboardModal function
+                    supabaseManager.showLeaderboardModal = originalShowLeaderboardModal;
+                }
+            };
+            
+            // Show the leaderboard
+            supabaseManager.showLeaderboardModal();
+        } else {
+            console.error('Supabase manager not initialized, cannot show leaderboard');
+        }
+    });
+}
+
+// Helper function to format play time
+function formatPlayTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}m ${remainingSeconds}s`;
+}
+
+// Reset game state for a new game
+function resetGame() {
+    // Stop animation loop
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+    }
+    
+    // Reset game state variables
+    gameActive = false;
+    gamePaused = false;
+    gameStartTime = 0;
+    
+    // Clear scene without reassigning
+    while(scene.children.length > 0) { 
+        scene.remove(scene.children[0]); 
+    }
+    
+    // Re-add essential lights
+    scene.add(hemiLight);
+    scene.add(ambientLight);
+    scene.add(sunLight);
+    scene.add(sunLight.target);
+    scene.add(camera);
+    
+    // Empty arrays without reassigning
+    torpedoes.length = 0;
+    enemyTorpedoes.length = 0;
+    islands.length = 0;
+    underwaterObjects.length = 0;
+    aboveWaterObjects.length = 0;
+    
+    // Reset lastTime for animation
+    lastTime = undefined;
+    
+    // Note: We don't need to remove event listeners here as they are
+    // defined as anonymous functions and will be garbage collected
+    // when the game is reinitialized
+    
+    // Reset camera position
+    camera.position.set(0, 20, 30);
+    camera.lookAt(0, 0, 0);
+}
+
+// Show start screen
+function showStartScreen() {
+    // First, clear the scene and reset the game state
+    scene.clear();
+    
+    // Reset the renderer
+    renderer.clear();
+    
+    // Remove any existing game over screen
+    const existingGameOverScreen = document.getElementById('game-over-screen');
+    if (existingGameOverScreen) {
+        document.body.removeChild(existingGameOverScreen);
+    }
+    
+    // Hide dashboard and controls
+    const dashboard = document.getElementById('dashboard');
+    const controlsInfo = document.getElementById('controls-info');
+    if (dashboard) dashboard.style.display = 'none';
+    if (controlsInfo) controlsInfo.style.display = 'none';
+    
+    // Check if start screen exists
+    const startScreen = document.getElementById('start-screen');
+    if (startScreen) {
+        // If it exists, just show it
+        startScreen.style.display = 'flex';
+    } else {
+        console.log('Start screen not found, creating a new one');
+        // Create a new start screen
+        if (typeof createStartScreen === 'function') {
+            createStartScreen();
+        } else {
+            console.error('createStartScreen function not found');
+            alert('Error: Could not return to start screen. Please refresh the page.');
+        }
+    }
+    
+    // Stop the animation loop if it's running
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+    }
 }
 
 // Set up game event listeners

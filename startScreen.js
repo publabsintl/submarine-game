@@ -38,9 +38,33 @@ function createStartScreen() {
         }
     });
     
+    // Create leaderboard button
+    const leaderboardButton = createButton('Leaderboard', () => {
+        // Show leaderboard
+        if (typeof SupabaseManager !== 'undefined') {
+            const supabase = new SupabaseManager();
+            supabase.showLeaderboardModal();
+        } else {
+            console.error('SupabaseManager not found');
+        }
+    });
+    
+    // Create controls button
+    const controlsButton = createButton('Controls', () => {
+        // Show controls modal
+        const controlsModal = document.getElementById('controls-modal');
+        if (controlsModal) {
+            controlsModal.style.display = 'flex';
+        } else {
+            console.error('Controls modal not found');
+        }
+    });
+    
     // Add buttons to container
     buttonsContainer.appendChild(singlePlayerButton);
     buttonsContainer.appendChild(multiPlayerButton);
+    buttonsContainer.appendChild(leaderboardButton);
+    buttonsContainer.appendChild(controlsButton);
     
     // Add elements to start screen
     startScreen.appendChild(title);
@@ -199,15 +223,21 @@ function showCustomizationScreen(startScreen) {
         const controlsInfo = document.getElementById('controls-info');
         
         if (dashboard) dashboard.style.display = 'flex';
-        if (controlsInfo) controlsInfo.style.display = 'block';
         
         // Initialize the game with player settings
         if (typeof initGame === 'function') {
-            initGame('single', {
+            // Create player settings object
+            const playerSettings = {
                 playerName: playerName,
                 submarineColor: submarineColor,
                 difficultyLevel: difficultyLevel
-            });
+            };
+            
+            // Store player name in window object for score submission
+            window.playerName = playerName;
+            
+            // Initialize the game with player settings
+            initGame('single', playerSettings);
         } else {
             console.error('initGame function not found');
         }
@@ -222,11 +252,6 @@ function showCustomizationScreen(startScreen) {
         startScreen.style.display = 'flex';
     });
     
-    // Add elements to form container
-    formContainer.appendChild(nameGroup);
-    formContainer.appendChild(colorGroup);
-    formContainer.appendChild(difficultyGroup);
-    
     // Create buttons container
     const buttonsContainer = document.createElement('div');
     buttonsContainer.classList.add('buttons-container');
@@ -234,6 +259,11 @@ function showCustomizationScreen(startScreen) {
     // Add buttons to container
     buttonsContainer.appendChild(startButton);
     buttonsContainer.appendChild(backButton);
+    
+    // Add form groups to form container
+    formContainer.appendChild(nameGroup);
+    formContainer.appendChild(colorGroup);
+    formContainer.appendChild(difficultyGroup);
     
     // Add elements to customization screen
     customScreen.appendChild(title);
