@@ -474,5 +474,5 @@ class EnvironmentSystem {
     }
 }
 
-// Export the environment system
+// Export the EnvironmentSystem class to the global scope
 window.EnvironmentSystem = EnvironmentSystem;
